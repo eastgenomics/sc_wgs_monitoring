@@ -5,6 +5,7 @@ import re
 from typing import Dict
 
 import dxpy
+import pandas as pd
 
 
 def login_to_dnanexus(token: str):
@@ -91,13 +92,15 @@ def get_sample_id_from_files(files: list) -> Dict:
 
 
 def move_inputs_in_new_folders(
-    project: dxpy.DXProject, sample_files: Dict
+    date: str, project: dxpy.DXProject, sample_files: Dict
 ) -> list:
     """Move the files necessary to the WGS workbook job in a folder as the job
     requires a DNAnexus folder as an input
 
     Parameters
     ----------
+    date: str
+        String for the date in YYMMDD format
     project: dxpy.DXProject
         DXProject object
     sample_files : Dict
@@ -109,9 +112,7 @@ def move_inputs_in_new_folders(
         List of folders where the inputs were moved to
     """
 
-    date = datetime.date.today().strftime("%y%m%d")
-
-    folders = []
+    folders = {}
 
     for sample, files in sample_files.items():
         folder = f"/{date}/{sample}"
@@ -122,7 +123,7 @@ def move_inputs_in_new_folders(
         for file in files:
             file.move(folder)
 
-        folders.append(folder)
+        folders[folder] = sample
 
     return folders
 
@@ -174,6 +175,28 @@ def get_output_id(execution: Dict) -> str:
             return job_output
 
 
+def write_confluence_csv(date: str, data: Dict) -> str:
+    """Write conflence csv
+
+    Parameters
+    ----------
+    date : str
+        Date string
+    data : Dict
+        Dict containing the data that needs to be imported in the Confluence db
+
+    Returns
+    -------
+    str
+        File name of the CSV
+    """
+
+    file_name = f"{date}.csv"
+    data = pd.DataFrame(data)
+    data.to_csv(file_name, index=False)
+    return file_name
+
+
 def main(**args):
     config_data = load_config()
 
@@ -197,8 +220,12 @@ def main(**args):
     )
     dxpy.set_workspace_id(sd_wgs_project.id)
 
+    date = datetime.date.today().strftime("%y%m%d")
+
     # start WGS workbook jobs
     if args["start_jobs"]:
+        data = {"name": [], "date_job_started": []}
+
         new_files = dxpy.bindings.find_data_objects(
             project=sd_wgs_project.id, created_after=args["time_to_check"]
         )
@@ -242,9 +269,11 @@ def main(**args):
             # TODO probably send a slack log message
             print("Couldn't find any files")
 
-        folders = move_inputs_in_new_folders(sd_wgs_project, sample_files)
+        folders = move_inputs_in_new_folders(
+            date, sd_wgs_project, sample_files
+        )
 
-        for folder in folders:
+        for folder, sample in folders.items():
             inputs = {
                 "hotspots": {"$dnanexus_link": config_data["hotspots"]},
                 "refgene_group": {
@@ -259,6 +288,12 @@ def main(**args):
             start_wgs_workbook_job(
                 inputs, config_data["sd_wgs_workbook_app_id"]
             )
+
+            data["name"].append(sample)
+            data["date_job_started"].append(folder.split("/")[1])
+
+        csv = write_confluence_csv(date, data)
+        dxpy.upload_local_file(csv, folder=f"/{date}/")
 
     # check jobs that have finished
     if args["check_jobs"]:
