@@ -240,25 +240,25 @@ def main(**args):
 
             folders = move_inputs_in_new_folders(sd_wgs_project, sample_files)
 
+            for folder in folders:
+                inputs = {
+                    "hotspots": {"$dnanexus_link": config_data["hotspots"]},
+                    "refgene_group": {
+                        "$dnanexus_link": config_data["refgene_group"]
+                    },
+                    "clinvar": {"$dnanexus_link": config_data["clinvar"]},
+                    "clinvar_index": {
+                        "$dnanexus_link": config_data["clinvar_index"]
+                    },
+                    "nextflow_pipeline_params": folder,
+                }
+                start_wgs_workbook_job(
+                    inputs, config_data["sd_wgs_workbook_app_id"]
+                )
+
         else:
             # TODO probably send a slack log message
             print("Couldn't find any files")
-
-        for folder in folders:
-            inputs = {
-                "hotspots": {"$dnanexus_link": config_data["hotspots"]},
-                "refgene_group": {
-                    "$dnanexus_link": config_data["refgene_group"]
-                },
-                "clinvar": {"$dnanexus_link": config_data["clinvar"]},
-                "clinvar_index": {
-                    "$dnanexus_link": config_data["clinvar_index"]
-                },
-                "nextflow_pipeline_params": folder,
-            }
-            start_wgs_workbook_job(
-                inputs, config_data["sd_wgs_workbook_app_id"]
-            )
 
     # check jobs that have finished
     if args["check_jobs"]:
