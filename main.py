@@ -1,204 +1,14 @@
 import argparse
 import datetime
-import json
 import re
-from typing import Dict
 
 import dxpy
-import pandas as pd
 
-
-def login_to_dnanexus(token: str):
-    """Login to dnanexus using the given token
-
-    Parameters
-    ----------
-    token : str
-        DNAnexus token to login
-    """
-
-    dx_security_context = {
-        "auth_token_type": "Bearer",
-        "auth_token": token,
-    }
-
-    dxpy.set_security_context(dx_security_context)
-
-
-def load_config() -> Dict:
-    """Load the configuration file
-
-    Returns
-    -------
-    Dict
-        Dict containing the keys for the various parameters used
-    """
-
-    with open("config.json") as f:
-        config_data = json.loads(f.read())
-
-    return config_data
-
-
-def get_sample_id_from_files(files: list) -> Dict:
-    """Get the sample id from the new files detected and link sample ids to
-    their files
-
-    Parameters
-    ----------
-    files : list
-        List of DNAnexus file objects
-
-    Returns
-    -------
-    Dict
-        Dict containing the sample id and their files
-    """
-
-    patterns = [
-        r"[-_]reported_structural_variants\..*\.csv",
-        r"[-_]reported_variants\..*\.csv",
-        r"\..*\.supplementary\.html",
-    ]
-
-    detected_sample_ids = set()
-
-    for file in files:
-        file_name = file.name
-        # we have some .html files that we don't want to match
-        matched_pattern = None
-
-        for pattern in patterns:
-            match = re.search(pattern, file_name)
-
-            if match:
-                matched_pattern = match
-
-        if matched_pattern:
-            detected_sample_ids.add(file_name[: matched_pattern.start()])
-
-    file_dict = {}
-
-    for sample_id in detected_sample_ids:
-        file_dict.setdefault(sample_id, [])
-
-        for file in files:
-            if sample_id in file.name:
-                file_dict[sample_id].append(file)
-
-    assert all(file_dict)
-
-    return file_dict
-
-
-def move_inputs_in_new_folders(
-    date: str, project: dxpy.DXProject, sample_files: Dict
-) -> list:
-    """Move the files necessary to the WGS workbook job in a folder as the job
-    requires a DNAnexus folder as an input
-
-    Parameters
-    ----------
-    date: str
-        String for the date in YYMMDD format
-    project: dxpy.DXProject
-        DXProject object
-    sample_files : Dict
-        Dict containing the sample id and their files
-
-    Returns
-    -------
-    list
-        List of folders where the inputs were moved to
-    """
-
-    folders = {}
-
-    for sample, files in sample_files.items():
-        folder = f"/{date}/{sample}"
-        dxpy.api.project_new_folder(
-            project.id, input_params={"folder": folder, "parents": True}
-        )
-
-        for file in files:
-            file.move(folder)
-
-        folders[folder] = sample
-
-    return folders
-
-
-def start_wgs_workbook_job(workbook_inputs: Dict, app_id: str) -> dxpy.DXJob:
-    """Start the WHS Solid cancer workbook job
-
-    Parameters
-    ----------
-    workbook_inputs : Dict
-        Dict containing the inputs for the sample
-    app_id : str
-        DNAnexus app to use for running the job
-
-    Returns
-    -------
-    dxpy.DXJob
-        DXJob object
-    """
-
-    return dxpy.bindings.dxapp.DXApp(dxid=app_id).run(
-        workbook_inputs,
-        folder=f"{workbook_inputs['nextflow_pipeline_params']}/output",
-    )
-
-
-def get_output_id(execution: Dict) -> str:
-    """Get the output file id for the WGS workbook job
-
-    Parameters
-    ----------
-    execution : Dict
-        Dict containing the describe output of the WGS workbook job
-
-    Returns
-    -------
-    str
-        File id of the WGS workbook job output
-    """
-
-    if execution["describe"]["state"] == "done":
-        job_output = [
-            output_id
-            for output_id in execution["output"]["published_files"].values()
-        ]
-
-        # sense check we have one output only
-        if len(job_output) == 1:
-            return job_output
-
-
-def write_confluence_csv(date: str, data: Dict) -> str:
-    """Write conflence csv
-
-    Parameters
-    ----------
-    date : str
-        Date string
-    data : Dict
-        Dict containing the data that needs to be imported in the Confluence db
-
-    Returns
-    -------
-    str
-        File name of the CSV
-    """
-
-    file_name = f"{date}.csv"
-    data = pd.DataFrame(data)
-    data.to_csv(file_name, index=False)
-    return file_name
+from sc_wgs_monitoring import utils, dnanexus
 
 
 def main(**args):
-    config_data = load_config()
+    config_data = utils.load_config()
 
     # override the values in the config file if the cli was used to override
     for config_key in [
@@ -213,7 +23,10 @@ def main(**args):
         if config_override_value:
             config_data[config_key] = config_override_value
 
-    login_to_dnanexus(args["dnanexus_token"])
+    dnanexus.login_to_dnanexus(args["dnanexus_token"])
+    utils.connect_to_db(
+        args["endpoint"], args["port"], args["user"], args["pwd"]
+    )
 
     sd_wgs_project = dxpy.bindings.DXProject(
         config_data["project_to_check_for_new_files"],
@@ -232,7 +45,7 @@ def main(**args):
 
         if new_files:
             # group files per id as a sense check
-            sample_files = get_sample_id_from_files(
+            sample_files = dnanexus.get_sample_id_from_files(
                 [
                     dxpy.DXFile(dxid=file["id"], project=file["project"])
                     for file in new_files
@@ -269,7 +82,7 @@ def main(**args):
             # TODO probably send a slack log message
             print("Couldn't find any files")
 
-        folders = move_inputs_in_new_folders(
+        folders = dnanexus.move_inputs_in_new_folders(
             date, sd_wgs_project, sample_files
         )
 
@@ -285,14 +98,14 @@ def main(**args):
                 },
                 "nextflow_pipeline_params": folder,
             }
-            start_wgs_workbook_job(
+            dnanexus.start_wgs_workbook_job(
                 inputs, config_data["sd_wgs_workbook_app_id"]
             )
 
             data["name"].append(sample)
             data["date_job_started"].append(folder.split("/")[1])
 
-        csv = write_confluence_csv(date, data)
+        csv = utils.write_confluence_csv(date, data)
         dxpy.upload_local_file(csv, folder=f"/{date}/")
 
     # check jobs that have finished
@@ -305,7 +118,7 @@ def main(**args):
         )
 
         for execution in executions:
-            for job_output in get_output_id(execution):
+            for job_output in dnanexus.get_output_id(execution):
                 dxpy.bindings.dxfile_functions.download_dxfile(
                     job_output, config_data["clingen_location"]
                 )
