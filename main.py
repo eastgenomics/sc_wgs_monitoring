@@ -238,11 +238,11 @@ def main(**args):
                 print("All files detected have already been processed")
                 exit()
 
+            folders = move_inputs_in_new_folders(sd_wgs_project, sample_files)
+
         else:
             # TODO probably send a slack log message
             print("Couldn't find any files")
-
-        folders = move_inputs_in_new_folders(sd_wgs_project, sample_files)
 
         for folder in folders:
             inputs = {
