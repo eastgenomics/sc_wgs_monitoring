@@ -1,11 +1,8 @@
 import json
-from typing import Dict, List
+from typing import Dict
 import re
 
 import pandas as pd
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, Session
-from sqlalchemy.sql.schema import MetaData
 
 
 def load_config() -> Dict:
@@ -21,41 +18,6 @@ def load_config() -> Dict:
         config_data = json.loads(f.read())
 
     return config_data
-
-
-def connect_to_db(
-    endpoint: str, port: str, user: str, pwd: str
-) -> List[Session, MetaData]:
-    """Connect to a postgres db using the given endpoint and credentials
-
-    Parameters
-    ----------
-    endpoint : str
-        Endpoint for the database to connect to
-    port : str
-        Port to use
-    user : str
-        Username to connect with
-    pwd : str
-        Password for the username
-
-    Returns
-    -------
-    List[Session, MetaData]
-        Session and metadata objects
-    """
-
-    # Create SQLAlchemy engine to connect to AWS database
-    url = "postgresql+psycopg2://" f"{user}:{pwd}@{endpoint}:{port}/ngtd"
-
-    engine = create_engine(url)
-
-    meta = MetaData(schema="testdirectory")
-    meta.reflect(bind=engine)
-    Session = sessionmaker(bind=engine)
-    session = Session()
-
-    return session, meta
 
 
 def get_sample_id_from_files(files: list) -> Dict:
