@@ -112,9 +112,6 @@ def main(**args):
 
             db.insert_in_db(session, sc_wgs_table, data)
 
-            # csv = utils.write_confluence_csv(date, data)
-            # dxpy.upload_local_file(csv, folder=f"/{date}/")
-
         else:
             # TODO probably send a slack log message
             print("Couldn't find any files")
