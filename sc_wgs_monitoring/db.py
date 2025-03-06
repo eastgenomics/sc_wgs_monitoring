@@ -44,9 +44,8 @@ def connect_to_db(
 def look_for_processed_samples(
     session: Session, table: Table, sample_id: str
 ) -> List:
-    res = session.execute(select(table).filter_by(referral_id=sample_id))
-
-    return res.one_or_none()
+    res = session.execute(select(table.c.gel_id).filter_by(gel_id=sample_id))
+    return res.one_or_none()[0]
 
 
 def insert_in_db(session: Session, table: Table, data: List):
