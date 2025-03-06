@@ -1,10 +1,9 @@
 import argparse
 import datetime
-import re
 
 import dxpy
 
-from sc_wgs_monitoring import utils, dnanexus
+from sc_wgs_monitoring import utils, dnanexus, db
 
 
 def main(**args):
@@ -23,11 +22,15 @@ def main(**args):
         if config_override_value:
             config_data[config_key] = config_override_value
 
-    dnanexus.login_to_dnanexus(args["dnanexus_token"])
-    utils.connect_to_db(
-        args["endpoint"], args["port"], args["user"], args["pwd"]
+    session, meta = db.connect_to_db(
+        config_data["endpoint"],
+        config_data["port"],
+        config_data["user"],
+        config_data["pwd"]
     )
+    sc_wgs_table = meta.tables["testdirectory.wgs_sc_tracker"]
 
+    dnanexus.login_to_dnanexus(args["dnanexus_token"])
     sd_wgs_project = dxpy.bindings.DXProject(
         config_data["project_to_check_for_new_files"],
     )
@@ -45,29 +48,19 @@ def main(**args):
 
         if new_files:
             # group files per id as a sense check
-            sample_files = dnanexus.get_sample_id_from_files(
+            sample_files = utils.get_sample_id_from_files(
                 [
                     dxpy.DXFile(dxid=file["id"], project=file["project"])
                     for file in new_files
                 ]
             )
 
-            processed_samples = []
-
-            for sample_id, files in sample_files.items():
-                processed_files = []
-
-                for file in files:
-                    # check if the folder path starts with a date formatted
-                    # string i.e. file has been processed
-                    if re.match(r"/[0-9]{6}", file.folder):
-                        processed_files.append(file)
-
-                # if there is a match in the number of files that have been
-                # detected to be processed
-                if len(processed_files) == len(files):
-                    print(f"Sample {sample_id} has already been processed")
-                    processed_samples.append(sample_id)
+            processed_samples = [
+                db.look_for_processed_samples(
+                    session, sc_wgs_table, sample_id
+                )
+                for sample_id in sample_files
+            ]
 
             # remove all processed samples from dict to be passed
             for sample_id in processed_samples:
@@ -107,7 +100,6 @@ def main(**args):
         else:
             # TODO probably send a slack log message
             print("Couldn't find any files")
-
 
     # check jobs that have finished
     if args["check_jobs"]:
