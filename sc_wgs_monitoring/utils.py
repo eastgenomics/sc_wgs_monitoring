@@ -70,24 +70,3 @@ def get_sample_id_from_files(files: list) -> Dict:
 
     return file_dict
 
-
-def write_confluence_csv(date: str, data: Dict) -> str:
-    """Write conflence csv
-
-    Parameters
-    ----------
-    date : str
-        Date string
-    data : Dict
-        Dict containing the data that needs to be imported in the Confluence db
-
-    Returns
-    -------
-    str
-        File name of the CSV
-    """
-
-    file_name = f"{date}.csv"
-    data = pd.DataFrame(data)
-    data.to_csv(file_name, index=False)
-    return file_name
