@@ -60,12 +60,12 @@ def main(**args):
                 for file in files:
                     # check if the folder path starts with a date formatted
                     # string i.e. file has been processed
-                    if not re.match(r"/[0-9]{6}", file.folder):
+                    if re.match(r"/[0-9]{6}", file.folder):
                         processed_files.append(file)
 
-                # if there is a mismatch in the number of files that have been
+                # if there is a match in the number of files that have been
                 # detected to be processed
-                if len(processed_files) != len(files):
+                if len(processed_files) == len(files):
                     print(f"Sample {sample_id} has already been processed")
                     processed_samples.append(sample_id)
 
