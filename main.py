@@ -78,35 +78,36 @@ def main(**args):
                 print("All files detected have already been processed")
                 exit()
 
+            folders = dnanexus.move_inputs_in_new_folders(
+                date, sd_wgs_project, sample_files
+            )
+
+            for folder, sample in folders.items():
+                inputs = {
+                    "hotspots": {"$dnanexus_link": config_data["hotspots"]},
+                    "refgene_group": {
+                        "$dnanexus_link": config_data["refgene_group"]
+                    },
+                    "clinvar": {"$dnanexus_link": config_data["clinvar"]},
+                    "clinvar_index": {
+                        "$dnanexus_link": config_data["clinvar_index"]
+                    },
+                    "nextflow_pipeline_params": folder,
+                }
+                dnanexus.start_wgs_workbook_job(
+                    inputs, config_data["sd_wgs_workbook_app_id"]
+                )
+
+                data["name"].append(sample)
+                data["date_job_started"].append(folder.split("/")[1])
+
+            csv = utils.write_confluence_csv(date, data)
+            dxpy.upload_local_file(csv, folder=f"/{date}/")
+
         else:
             # TODO probably send a slack log message
             print("Couldn't find any files")
 
-        folders = dnanexus.move_inputs_in_new_folders(
-            date, sd_wgs_project, sample_files
-        )
-
-        for folder, sample in folders.items():
-            inputs = {
-                "hotspots": {"$dnanexus_link": config_data["hotspots"]},
-                "refgene_group": {
-                    "$dnanexus_link": config_data["refgene_group"]
-                },
-                "clinvar": {"$dnanexus_link": config_data["clinvar"]},
-                "clinvar_index": {
-                    "$dnanexus_link": config_data["clinvar_index"]
-                },
-                "nextflow_pipeline_params": folder,
-            }
-            dnanexus.start_wgs_workbook_job(
-                inputs, config_data["sd_wgs_workbook_app_id"]
-            )
-
-            data["name"].append(sample)
-            data["date_job_started"].append(folder.split("/")[1])
-
-        csv = utils.write_confluence_csv(date, data)
-        dxpy.upload_local_file(csv, folder=f"/{date}/")
 
     # check jobs that have finished
     if args["check_jobs"]:
