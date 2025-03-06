@@ -42,8 +42,11 @@ def main(**args):
     if args["start_jobs"]:
         data = []
 
-        new_files = dxpy.bindings.find_data_objects(
-            project=sd_wgs_project.id, created_after=args["time_to_check"]
+        new_files = list(
+            dxpy.bindings.find_data_objects(
+                project=sd_wgs_project.id,
+                created_after=f"-{args['time_to_check']}"
+            )
         )
 
         if new_files:
@@ -62,9 +65,10 @@ def main(**args):
                 for sample_id in sample_files
             ]
 
-            # remove all processed samples from dict to be passed
-            for sample_id in processed_samples:
-                del sample_files[sample_id]
+            if any(processed_samples):
+                # remove all processed samples from dict to be passed
+                for sample_id in processed_samples:
+                    del sample_files[sample_id]
 
             # all samples were removed
             if not sample_files:
@@ -97,9 +101,11 @@ def main(**args):
                     inputs, config_data["sd_wgs_workbook_app_id"]
                 )
 
-                sample_data["referral_id"] = sample
+                sample_data["gel_id"] = sample
                 sample_data["date_added"] = date
-                sample_data["location_in_dnanexus"] = folder
+                sample_data["location_in_dnanexus"] = (
+                    f"{config_data['project_to_check_for_new_files']}:{folder}"
+                )
                 sample_data["status"] = "Job started"
 
             data.append(sample_data)
