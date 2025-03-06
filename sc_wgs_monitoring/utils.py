@@ -69,4 +69,3 @@ def get_sample_id_from_files(files: list) -> Dict:
     assert all(file_dict)
 
     return file_dict
-
