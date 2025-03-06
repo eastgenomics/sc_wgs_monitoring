@@ -40,7 +40,7 @@ def main(**args):
 
     # start WGS workbook jobs
     if args["start_jobs"]:
-        data = {"name": [], "date_job_started": []}
+        data = []
 
         new_files = dxpy.bindings.find_data_objects(
             project=sd_wgs_project.id, created_after=args["time_to_check"]
@@ -76,6 +76,12 @@ def main(**args):
             )
 
             for folder, sample in folders.items():
+                sample_data = {
+                    column.name: None
+                    for column in sc_wgs_table.columns
+                    if column.name != "id"
+                }
+
                 inputs = {
                     "hotspots": {"$dnanexus_link": config_data["hotspots"]},
                     "refgene_group": {
@@ -91,11 +97,17 @@ def main(**args):
                     inputs, config_data["sd_wgs_workbook_app_id"]
                 )
 
-                data["name"].append(sample)
-                data["date_job_started"].append(folder.split("/")[1])
+                sample_data["referral_id"] = sample
+                sample_data["date_added"] = date
+                sample_data["location_in_dnanexus"] = folder
+                sample_data["status"] = "Job started"
 
-            csv = utils.write_confluence_csv(date, data)
-            dxpy.upload_local_file(csv, folder=f"/{date}/")
+            data.append(sample_data)
+
+            db.insert_in_db(session, sc_wgs_table, data)
+
+            # csv = utils.write_confluence_csv(date, data)
+            # dxpy.upload_local_file(csv, folder=f"/{date}/")
 
         else:
             # TODO probably send a slack log message
