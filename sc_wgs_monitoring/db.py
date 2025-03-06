@@ -1,6 +1,7 @@
-from typing import Tuple
+from typing import Tuple, List
 
 from sqlalchemy import create_engine, select, insert
+from sqlalchemy.schema import Table
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.sql.schema import MetaData
 
@@ -40,18 +41,15 @@ def connect_to_db(
     return session, meta
 
 
-def look_for_processed_samples(session, table, sample_id):
+def look_for_processed_samples(
+    session: Session, table: Table, sample_id: str
+) -> List:
     res = session.execute(select(table).filter_by(referral_id=sample_id))
 
-    if len(res.all()) >= 2:
-        raise Exception(
-            f"2 or more rows have the same referral id: {sample_id}"
-        )
-    else:
-        return res.all()
+    return res.one_or_none()
 
 
-def insert_in_db(session, table, data):
+def insert_in_db(session: Session, table: Table, data: List):
     """Insert the data in the database
 
     Parameters
