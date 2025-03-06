@@ -43,7 +43,24 @@ def connect_to_db(
 
 def look_for_processed_samples(
     session: Session, table: Table, sample_id: str
-) -> List:
+) -> str:
+    """Query the database for a given sample id
+
+    Parameters
+    ----------
+    session : Session
+        Session SQLAlchemy object
+    table : Table
+        Table SQLAlchemy object
+    sample_id : str
+        String for the sample id to query with
+
+    Returns
+    -------
+    str
+        String with the result of the query
+    """
+
     res = session.execute(select(table.c.gel_id).filter_by(gel_id=sample_id))
     return res.one_or_none()[0]
 
