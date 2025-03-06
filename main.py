@@ -22,6 +22,7 @@ def main(**args):
         if config_override_value:
             config_data[config_key] = config_override_value
 
+    # Database setup things
     session, meta = db.connect_to_db(
         config_data["endpoint"],
         config_data["port"],
@@ -30,6 +31,7 @@ def main(**args):
     )
     sc_wgs_table = meta.tables["testdirectory.wgs_sc_tracker"]
 
+    # DNAnexus setup things
     dnanexus.login_to_dnanexus(args["dnanexus_token"])
     sd_wgs_project = dxpy.bindings.DXProject(
         config_data["project_to_check_for_new_files"],
@@ -58,6 +60,8 @@ def main(**args):
                 ]
             )
 
+            # query the database to find samples that have already been
+            # processed
             processed_samples = [
                 db.look_for_processed_samples(
                     session, sc_wgs_table, sample_id
@@ -65,6 +69,8 @@ def main(**args):
                 for sample_id in sample_files
             ]
 
+            # previous function returns a list of result or None so checking if
+            # we have at least one sample to import in the db
             if any(processed_samples):
                 # remove all processed samples from dict to be passed
                 for sample_id in processed_samples:
@@ -80,6 +86,7 @@ def main(**args):
             )
 
             for folder, sample in folders.items():
+                # setup dict with the columns that need to be populated
                 sample_data = {
                     column.name: None
                     for column in sc_wgs_table.columns
@@ -101,14 +108,14 @@ def main(**args):
                     inputs, config_data["sd_wgs_workbook_app_id"]
                 )
 
+                # populate the dict
                 sample_data["gel_id"] = sample
                 sample_data["date_added"] = date
                 sample_data["location_in_dnanexus"] = (
                     f"{config_data['project_to_check_for_new_files']}:{folder}"
                 )
                 sample_data["status"] = "Job started"
-
-            data.append(sample_data)
+                data.append(sample_data)
 
             db.insert_in_db(session, sc_wgs_table, data)
 
