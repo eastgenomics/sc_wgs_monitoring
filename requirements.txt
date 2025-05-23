@@ -1,0 +1,12 @@
+argcomplete==3.6.2
+certifi==2025.4.26
+crc32c==2.7.1
+dxpy==0.396.0
+greenlet==3.2.2
+psutil==7.0.0
+python-dateutil==2.9.0.post0
+six==1.17.0
+SQLAlchemy==2.0.41
+typing_extensions==4.13.2
+urllib3==2.1.0
+websocket-client==1.7.0
