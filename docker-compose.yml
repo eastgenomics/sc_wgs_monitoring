@@ -1,0 +1,68 @@
+services:
+  # database containers, one for each db
+  sc_wgs_db:
+    container_name: sc_wgs_db
+    build:
+      context: .
+      dockerfile: monitoring_db.Dockerfile
+    image: sc_wgs_monitoring_db:1.0.0
+    restart: always
+    volumes:
+      - db:/var/lib/postgresql/data/
+    environment:
+      - POSTGRES_USER
+      - POSTGRES_PASSWORD
+      - POSTGRES_DB
+
+  # web container, with django + gunicorn
+  sc_wgs_monitoring:
+    container_name: sc_wgs_monitoring
+    build:
+      context: .
+      dockerfile: monitoring_app.Dockerfile
+    image: sc_wgs_monitoring:1.0.0
+    restart: always
+    environment:
+      - DNANEXUS_TOKEN
+      - DB_NAME
+      - DB_USER
+      - DB_PASSWORD
+      - HOST
+      - SLACK_TOKEN
+      - SLACK_LOG_CHANNEL
+      - SLACK_ALERT_CHANNEL
+      - DEBUG
+      - VERSION
+    expose:
+      - 8010
+    volumes:
+      - /var/log/monitoring:/app/sc_wgs_monitoring/grafana
+    depends_on:
+      - sc_wgs_db
+
+  # reverse proxy container (nginx)
+  sc_wgs_nginx:
+    container_name: sc_wgs_monitoring_proxy
+    image: nginx:1.23
+    restart: always
+    ports:
+      - 8012:80
+    volumes:
+      - ./config/nginx/conf.d:/etc/nginx/conf.d
+      # - volume in the server in which the cron job will for new files
+    environment:
+      - VIRTUAL_HOST
+      - VIRTUAL_PATH
+    expose:
+      - 8012
+    depends_on:
+      - sc_wgs_monitoring
+
+networks:
+  default:
+    name: nginx-default
+    external: true
+
+volumes:
+  db:
+    name: sc_wgs_db
