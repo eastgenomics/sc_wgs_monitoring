@@ -60,6 +60,7 @@ def main(**args):
                 ]
             )
 
+
             # query the database to find samples that have already been
             # processed
             processed_samples = [
@@ -104,6 +105,7 @@ def main(**args):
                     },
                     "nextflow_pipeline_params": folder,
                 }
+
                 dnanexus.start_wgs_workbook_job(
                     inputs, config_data["sd_wgs_workbook_app_id"]
                 )
