@@ -7,7 +7,7 @@ from sc_wgs_monitoring import utils, dnanexus, db
 
 
 def main(**args):
-    config_data = utils.load_config()
+    config_data = utils.load_config(args["config"])
 
     # override the values in the config file if the cli was used to override
     for config_key in [
@@ -24,12 +24,12 @@ def main(**args):
 
     # Database setup things
     session, meta = db.connect_to_db(
-        config_data["endpoint"],
         config_data["port"],
         config_data["user"],
-        config_data["pwd"]
+        config_data["pwd"],
+        config_data["db_name"],
     )
-    sc_wgs_table = meta.tables["testdirectory.wgs_sc_tracker"]
+    sc_wgs_table = meta.tables["sc_wgs_data"]
 
     # DNAnexus setup things
     dnanexus.login_to_dnanexus(args["dnanexus_token"])
@@ -47,7 +47,7 @@ def main(**args):
         new_files = list(
             dxpy.bindings.find_data_objects(
                 project=sd_wgs_project.id,
-                created_after=f"-{args['time_to_check']}"
+                created_after=f"-{args['time_to_check']}",
             )
         )
 
@@ -60,13 +60,10 @@ def main(**args):
                 ]
             )
 
-
             # query the database to find samples that have already been
             # processed
             processed_samples = [
-                db.look_for_processed_samples(
-                    session, sc_wgs_table, sample_id
-                )
+                db.look_for_processed_samples(session, sc_wgs_table, sample_id)
                 for sample_id in sample_files
             ]
 
@@ -144,7 +141,13 @@ def main(**args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("dnanexus_token")
-    parser.add_argument("time_to_check", default="-1d")
+    parser.add_argument("-t", "--time_to_check", required=False, default="-1d")
+    parser.add_argument(
+        "-config",
+        "--config",
+        required=False,
+        default="/app/sc_wgs_monitoring/config.json",
+    )
 
     type_processing = parser.add_mutually_exclusive_group()
     type_processing.add_argument(
