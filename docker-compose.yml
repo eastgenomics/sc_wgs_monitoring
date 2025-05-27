@@ -1,12 +1,12 @@
 services:
   # database containers, one for each db
-  sc_wgs_db:
+  db:
     container_name: sc_wgs_db
     build:
       context: .
       dockerfile: monitoring_db.Dockerfile
     image: sc_wgs_monitoring_db:1.0.0
-    restart: always
+    # restart: always
     volumes:
       - db:/var/lib/postgresql/data/
     environment:
@@ -15,13 +15,13 @@ services:
       - POSTGRES_DB
 
   # web container, with django + gunicorn
-  sc_wgs_monitoring:
+  monitoring:
     container_name: sc_wgs_monitoring
     build:
       context: .
       dockerfile: monitoring_app.Dockerfile
     image: sc_wgs_monitoring:1.0.0
-    restart: always
+    # restart: always
     environment:
       - DNANEXUS_TOKEN
       - DB_NAME
@@ -38,13 +38,13 @@ services:
     volumes:
       - /var/log/monitoring:/app/sc_wgs_monitoring/grafana
     depends_on:
-      - sc_wgs_db
+      - db
 
   # reverse proxy container (nginx)
-  sc_wgs_nginx:
+  nginx:
     container_name: sc_wgs_monitoring_proxy
     image: nginx:1.23
-    restart: always
+    # restart: always
     ports:
       - 8012:80
     volumes:
@@ -56,7 +56,7 @@ services:
     expose:
       - 8012
     depends_on:
-      - sc_wgs_monitoring
+      - monitoring
 
 networks:
   default:
@@ -65,4 +65,4 @@ networks:
 
 volumes:
   db:
-    name: sc_wgs_db
+    name: db
