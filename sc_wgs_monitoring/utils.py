@@ -2,10 +2,8 @@ import json
 from typing import Dict
 import re
 
-import pandas as pd
 
-
-def load_config() -> Dict:
+def load_config(config_file) -> Dict:
     """Load the configuration file
 
     Returns
@@ -14,7 +12,7 @@ def load_config() -> Dict:
         Dict containing the keys for the various parameters used
     """
 
-    with open("config.json") as f:
+    with open(config_file) as f:
         config_data = json.loads(f.read())
 
     return config_data
