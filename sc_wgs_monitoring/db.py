@@ -7,20 +7,18 @@ from sqlalchemy.sql.schema import MetaData
 
 
 def connect_to_db(
-    endpoint: str, port: str, user: str, pwd: str
+    user: str, pwd: str, db_name: str
 ) -> Tuple[Session, MetaData]:
     """Connect to a postgres db using the given endpoint and credentials
 
     Parameters
     ----------
-    endpoint : str
-        Endpoint for the database to connect to
-    port : str
-        Port to use
     user : str
         Username to connect with
     pwd : str
         Password for the username
+    db_name : str
+        Endpoint for the database to connect to
 
     Returns
     -------
@@ -29,11 +27,11 @@ def connect_to_db(
     """
 
     # Create SQLAlchemy engine to connect to AWS database
-    url = "postgresql+psycopg2://" f"{user}:{pwd}@{endpoint}:{port}/ngtd"
+    url = f"postgresql+psycopg://{user}:{pwd}@db/{db_name}"
 
     engine = create_engine(url)
 
-    meta = MetaData(schema="testdirectory")
+    meta = MetaData()
     meta.reflect(bind=engine)
     Session = sessionmaker(bind=engine)
     session = Session()
