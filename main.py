@@ -3,7 +3,7 @@ import datetime
 
 import dxpy
 
-from sc_wgs_monitoring import utils, dnanexus, db
+from sc_wgs_monitoring import check, dnanexus, db, utils
 
 
 def main(**args):
@@ -43,13 +43,34 @@ def main(**args):
     # start WGS workbook jobs
     if args["start_jobs"]:
         data = []
+        new_files = None
 
-        new_files = list(
-            dxpy.bindings.find_data_objects(
-                project=sd_wgs_project.id,
-                created_after=f"-{args['time_to_check']}",
+        if args["files"]:
+            if all([utils.check_dnanexus_id(file) for file in args["files"]]):
+                new_files = [dxpy.DXFile(file) for file in args["files"]]
+            else:
+                raise AssertionError(
+                    f"Provided files {args['files']} are not all DNAnexus "
+                    "file ids"
+                )
+
+            if not check.set_of_inputs_correct(new_files):
+                raise AssertionError(
+                    f"The set of provided files is not correct. Expected files with the following patterns: {[
+                        r'[-_]reported_structural_variants\..*\.csv',
+                        r'[-_]reported_variants\..*\.csv',
+                        r'\..*\.supplementary\.html',
+                    ]}. "
+                    f"Got {"|".join([file.name for file in new_files])}"
+                )
+
+        else:
+            new_files = list(
+                dxpy.bindings.find_data_objects(
+                    project=sd_wgs_project.id,
+                    created_after=f"-{args['time_to_check']}",
+                )
             )
-        )
 
         if new_files:
             # group files per id as a sense check
@@ -147,6 +168,12 @@ if __name__ == "__main__":
         "--config",
         required=False,
         default="/app/sc_wgs_monitoring/config.json",
+    )
+    parser.add_argument(
+        "-f",
+        "--files",
+        nargs="+",
+        help=("Files to process (file ids in DNAnexus)"),
     )
 
     type_processing = parser.add_mutually_exclusive_group()
