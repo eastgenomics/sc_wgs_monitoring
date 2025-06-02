@@ -2,6 +2,8 @@ import json
 from typing import Dict
 import re
 
+from bs4 import BeautifulSoup
+
 
 def load_config(config_file) -> Dict:
     """Load the configuration file
@@ -67,3 +69,8 @@ def get_sample_id_from_files(files: list) -> Dict:
     assert all(file_dict)
 
     return file_dict
+
+
+def remove_pid_div_from_supplementary_file(file):
+    soup = BeautifulSoup(file, "html.parser")
+    return soup
