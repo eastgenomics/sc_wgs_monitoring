@@ -1,6 +1,8 @@
-import json
+import importlib.util
+from pathlib import Path
 from typing import Dict
 import re
+import sys
 
 from bs4 import BeautifulSoup
 
@@ -14,10 +16,15 @@ def load_config(config_file) -> Dict:
         Dict containing the keys for the various parameters used
     """
 
-    with open(config_file) as f:
-        config_data = json.loads(f.read())
+    config_path = Path(config_file)
 
-    return config_data
+    spec = importlib.util.spec_from_file_location(
+        config_path.name.replace(".py", ""), config_path
+    )
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[config_path.name] = module
+    spec.loader.exec_module(module)
+    return module.CONFIG
 
 
 def get_sample_id_from_files(files: list, patterns: list) -> Dict:
@@ -67,7 +74,23 @@ def get_sample_id_from_files(files: list, patterns: list) -> Dict:
     return file_dict
 
 
-def remove_pid_div_from_supplementary_file(file):
-    soup = BeautifulSoup(file, "html.parser")
-    soup.find("div", id="").decompose()
-    return soup
+def remove_pid_div_from_supplementary_file(file: str) -> BeautifulSoup:
+    """Remove the div with personal identifiable data from the supplementary
+    HTML
+
+    Parameters
+    ----------
+    file : str
+        File path to the supplementary HTML file
+
+    Returns
+    -------
+    BeautifulSoup
+        BeautifulSoup object containing the HTML supplementary without the PID
+        div
+    """
+
+    with open(file) as f:
+        soup = BeautifulSoup(f, "html.parser")
+        soup.find("div", id="pid").decompose()
+        return soup
