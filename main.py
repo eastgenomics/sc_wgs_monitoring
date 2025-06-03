@@ -1,5 +1,6 @@
 import argparse
 import datetime
+import re
 
 import dxpy
 
@@ -24,12 +25,13 @@ def main(**args):
 
     # Database setup things
     session, meta = db.connect_to_db(
-        config_data["port"],
         config_data["user"],
         config_data["pwd"],
         config_data["db_name"],
     )
     sc_wgs_table = meta.tables["sc_wgs_data"]
+
+    # TODO check if there are new files to process in clingen
 
     # DNAnexus setup things
     dnanexus.login_to_dnanexus(args["dnanexus_token"])
@@ -40,12 +42,22 @@ def main(**args):
 
     date = datetime.date.today().strftime("%y%m%d")
 
+    if not args["start_jobs"] and not args["check_jobs"]:
+        raise AssertionError(
+            "No processing type specified, please use -s or -c"
+        )
+
     # start WGS workbook jobs
     if args["start_jobs"]:
         data = []
         new_files = None
+        patterns = [
+            r"[-_]reported_structural_variants\..*\.csv",
+            r"[-_]reported_variants\..*\.csv",
+            r"\..*\.supplementary\.html",
+        ]
 
-        if args["files"]:
+        if args["dnanexus_file_ids"]:
             if all([utils.check_dnanexus_id(file) for file in args["files"]]):
                 new_files = [dxpy.DXFile(file) for file in args["files"]]
             else:
@@ -54,15 +66,30 @@ def main(**args):
                     "file ids"
                 )
 
-            if not check.set_of_inputs_correct(new_files):
+        elif args["local_files"]:
+            if not all(
+                [
+                    check.check_if_file_exists(file)
+                    for file in args["local_files"]
+                ]
+            ):
                 raise AssertionError(
-                    f"The set of provided files is not correct. Expected files with the following patterns: {[
-                        r'[-_]reported_structural_variants\..*\.csv',
-                        r'[-_]reported_variants\..*\.csv',
-                        r'\..*\.supplementary\.html',
-                    ]}. "
-                    f"Got {"|".join([file.name for file in new_files])}"
+                    "One of the files given doesn't exist "
+                    f"{'|'.join([file for file in new_files])}"
                 )
+
+            new_files = args["local_files"]
+            supplementary_html = [
+                file
+                for file in new_files
+                if re.search(r"\..*\.supplementary\.html", file)
+            ][0]
+            new_html = utils.remove_pid_div_from_supplementary_file(
+                supplementary_html
+            )
+
+            with open(supplementary_html, "w") as file:
+                file.write(str(new_html))
 
         else:
             new_files = list(
@@ -72,14 +99,22 @@ def main(**args):
                 )
             )
 
+        if not all(
+            check.check_file_input_name_is_correct(file, patterns)
+            for file in new_files
+        ):
+            raise AssertionError(
+                f"The set of provided files is not correct. Expected files with the following patterns: {[
+                    r'[-_]reported_structural_variants\..*\.csv',
+                    r'[-_]reported_variants\..*\.csv',
+                    r'\..*\.supplementary\.html',
+                ]}. "
+                f"Got {"|".join([file for file in new_files])}"
+            )
+
         if new_files:
             # group files per id as a sense check
-            sample_files = utils.get_sample_id_from_files(
-                [
-                    dxpy.DXFile(dxid=file["id"], project=file["project"])
-                    for file in new_files
-                ]
-            )
+            sample_files = utils.get_sample_id_from_files(new_files, patterns)
 
             # query the database to find samples that have already been
             # processed
@@ -170,10 +205,16 @@ if __name__ == "__main__":
         default="/app/sc_wgs_monitoring/config.json",
     )
     parser.add_argument(
-        "-f",
-        "--files",
+        "-l",
+        "--local_files",
         nargs="+",
-        help=("Files to process (file ids in DNAnexus)"),
+        help="Local files to process",
+    )
+    parser.add_argument(
+        "-ids",
+        "--dnanexus_file_ids",
+        nargs="+",
+        help="DNAnexus ids for the input of the workbook job",
     )
 
     type_processing = parser.add_mutually_exclusive_group()
