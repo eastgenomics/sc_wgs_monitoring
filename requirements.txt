@@ -1,4 +1,5 @@
 argcomplete==3.6.2
+beautifulsoup4==4.13.4
 certifi==2025.4.26
 crc32c==2.7.1
 dxpy==0.396.0
