@@ -82,7 +82,7 @@ def main(**args):
             supplementary_html = [
                 file
                 for file in new_files
-                if re.search(r"\..*\.supplementary\.html", file)
+                if re.search(r".*\.supplementary\.html", file)
             ][0]
             new_html = utils.remove_pid_div_from_supplementary_file(
                 supplementary_html
@@ -202,7 +202,7 @@ if __name__ == "__main__":
         "-config",
         "--config",
         required=False,
-        default="/app/sc_wgs_monitoring/config.json",
+        default="/app/sc_wgs_monitoring/config.py",
     )
     parser.add_argument(
         "-l",
