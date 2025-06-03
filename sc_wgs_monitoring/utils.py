@@ -20,7 +20,7 @@ def load_config(config_file) -> Dict:
     return config_data
 
 
-def get_sample_id_from_files(files: list) -> Dict:
+def get_sample_id_from_files(files: list, patterns: list) -> Dict:
     """Get the sample id from the new files detected and link sample ids to
     their files
 
@@ -28,18 +28,14 @@ def get_sample_id_from_files(files: list) -> Dict:
     ----------
     files : list
         List of DNAnexus file objects
+    patterns : list
+        Expected patterns for the file name
 
     Returns
     -------
     Dict
         Dict containing the sample id and their files
     """
-
-    patterns = [
-        r"[-_]reported_structural_variants\..*\.csv",
-        r"[-_]reported_variants\..*\.csv",
-        r"\..*\.supplementary\.html",
-    ]
 
     detected_sample_ids = set()
 
@@ -73,4 +69,5 @@ def get_sample_id_from_files(files: list) -> Dict:
 
 def remove_pid_div_from_supplementary_file(file):
     soup = BeautifulSoup(file, "html.parser")
+    soup.find("div", id="").decompose()
     return soup
