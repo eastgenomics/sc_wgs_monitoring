@@ -20,11 +20,10 @@ def login_to_dnanexus(token: str):
     dxpy.set_security_context(dx_security_context)
 
 
-def move_inputs_in_new_folders(
+def upload_input_files(
     date: str, project: dxpy.DXProject, sample_files: Dict
 ) -> list:
-    """Move the files necessary to the WGS workbook job in a folder as the job
-    requires a DNAnexus folder as an input
+    """Upload the input files required for creating the WGS workbook
 
     Parameters
     ----------
@@ -50,7 +49,7 @@ def move_inputs_in_new_folders(
         )
 
         for file in files:
-            file.move(folder)
+            dxpy.upload_local_file(file, project=project.id, folder=folder)
 
         folders[folder] = sample
 
