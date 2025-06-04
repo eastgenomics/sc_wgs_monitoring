@@ -74,7 +74,9 @@ def get_sample_id_from_files(files: list, patterns: list) -> Dict:
     return file_dict
 
 
-def remove_pid_div_from_supplementary_file(file: str) -> BeautifulSoup:
+def remove_pid_div_from_supplementary_file(
+    file: str, pid_div_id: str
+) -> BeautifulSoup:
     """Remove the div with personal identifiable data from the supplementary
     HTML
 
@@ -82,6 +84,8 @@ def remove_pid_div_from_supplementary_file(file: str) -> BeautifulSoup:
     ----------
     file : str
         File path to the supplementary HTML file
+    pid_div_id : str
+        Id of the div to look for in the HTML file
 
     Returns
     -------
@@ -92,5 +96,5 @@ def remove_pid_div_from_supplementary_file(file: str) -> BeautifulSoup:
 
     with open(file) as f:
         soup = BeautifulSoup(f, "html.parser")
-        soup.find("div", id="pid").decompose()
+        soup.find("div", id=pid_div_id).decompose()
         return soup

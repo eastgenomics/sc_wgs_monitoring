@@ -85,7 +85,7 @@ def main(**args):
                 if re.search(r".*\.supplementary\.html", file)
             ][0]
             new_html = utils.remove_pid_div_from_supplementary_file(
-                supplementary_html
+                supplementary_html, config_data["pid_div_id"]
             )
 
             with open(supplementary_html, "w") as file:
