@@ -19,3 +19,31 @@ The necessary inputs are:
 ```sh
 docker exec ${container_id} sh -c 'python3 /app/sc_wgs_monitoring/main.py "$DNANEXUS_TOKEN" ...'
 ```
+
+## Config
+
+```python
+CONFIG = {
+    "user": "",
+    "pwd": "",
+    "db_name": "",
+    "project_to_check_for_new_files": "",
+    "input_patterns": [
+        r"[-_]reported_structural_variants\..*\.csv",
+        r"[-_]reported_variants\..*\.csv",
+        r"\..*\.supplementary\.html",
+    ],
+    "pid_div_id": "",
+    "sd_wgs_workbook_app_id": "",
+    "workbook_inputs": {
+        "hotspots": "",
+        "reference_gene_groups": "",
+        "panelapp": "",
+        "cytological_bands": "",
+        "clinvar": "",
+        "clinvar_index": "",
+    },
+    "clingen_location": "",
+}
+
+```
