@@ -11,17 +11,16 @@ def main(**args):
     config_data = utils.load_config(args["config"])
 
     # override the values in the config file if the cli was used to override
-    for config_key in [
-        "hotspots",
-        "refgene_group",
-        "clinvar",
-        "clinvar_index",
-        "clingen_location",
-    ]:
+    for config_key in config_data:
         config_override_value = args.get(config_key, None)
 
         if config_override_value:
             config_data[config_key] = config_override_value
+        else:
+            if config_key in config_data["workbook_inputs"]:
+                config_data["workbook_inputs"][
+                    config_key
+                ] = config_override_value
 
     # Database setup things
     session, meta = db.connect_to_db(
@@ -92,12 +91,9 @@ def main(**args):
                 file.write(str(new_html))
 
         else:
-            new_files = list(
-                dxpy.bindings.find_data_objects(
-                    project=sd_wgs_project.id,
-                    created_after=f"-{args['time_to_check']}",
-                )
-            )
+            # TODO check local clingen location for new files using the
+            # time_to_check parameter
+            pass
 
         if not all(
             check.check_file_input_name_is_correct(file, patterns)
@@ -135,7 +131,7 @@ def main(**args):
                 print("All files detected have already been processed")
                 exit()
 
-            folders = dnanexus.move_inputs_in_new_folders(
+            folders = dnanexus.upload_input_files(
                 date, sd_wgs_project, sample_files
             )
 
