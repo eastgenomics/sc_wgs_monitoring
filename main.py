@@ -124,11 +124,15 @@ def main(**args):
             if any(processed_samples):
                 # remove all processed samples from dict to be passed
                 for sample_id in processed_samples:
+                    print(f"{sample_id} has already been processed")
                     del sample_files[sample_id]
 
             # all samples were removed
             if not sample_files:
-                print("All files detected have already been processed")
+                print(
+                    "All files detected have already been processed. "
+                    "Exiting..."
+                )
                 exit()
 
             folders = dnanexus.upload_input_files(
