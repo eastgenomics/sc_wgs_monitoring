@@ -149,14 +149,17 @@ def main(**args):
 
                 inputs = {
                     "hotspots": {"$dnanexus_link": config_data["hotspots"]},
-                    "refgene_group": {
-                        "$dnanexus_link": config_data["refgene_group"]
+                    "reference_gene_groups": {
+                        "$dnanexus_link": config_data["reference_gene_groups"]
+                    },
+                    "panelapp": {"$dnanexus_link": config_data["panelapp"]},
+                    "cytological_bands": {
+                        "$dnanexus_link": config_data["cytological_bands"]
                     },
                     "clinvar": {"$dnanexus_link": config_data["clinvar"]},
                     "clinvar_index": {
                         "$dnanexus_link": config_data["clinvar_index"]
                     },
-                    "nextflow_pipeline_params": folder,
                 }
 
                 dnanexus.start_wgs_workbook_job(
@@ -246,9 +249,19 @@ if __name__ == "__main__":
         help="hotspots parameter to override config data",
     )
     config_override.add_argument(
-        "-refgene_group",
-        "--refgene_group",
-        help="refgene_group parameter to override config data",
+        "-reference_gene_groups",
+        "--reference_gene_groups",
+        help="reference_gene_groups parameter to override config data",
+    )
+    config_override.add_argument(
+        "-panelapp",
+        "--panelapp",
+        help="panelapp parameter to override config data",
+    )
+    config_override.add_argument(
+        "-cytological_bands",
+        "--cytological_bands",
+        help="cytological_bands parameter to override config data",
     )
     config_override.add_argument(
         "-clinvar",
