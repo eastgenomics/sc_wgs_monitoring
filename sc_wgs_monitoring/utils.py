@@ -96,5 +96,9 @@ def remove_pid_div_from_supplementary_file(
 
     with open(file) as f:
         soup = BeautifulSoup(f, "html.parser")
-        soup.find("div", id=pid_div_id).decompose()
+        pid_div = soup.find("div", id=pid_div_id)
+
+        if pid_div is not None:
+            pid_div.decompose()
+
         return soup
