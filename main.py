@@ -45,7 +45,7 @@ def main(**args):
 
     # start WGS workbook jobs
     if args["start_jobs"]:
-        data = []
+        db_data = []
         new_files = None
         patterns = {
             r"[-_]reported_structural_variants\..*\.csv": "reported_structural_variants",
@@ -55,12 +55,19 @@ def main(**args):
 
         # handle given dnanexus file ids
         if args["dnanexus_file_ids"]:
-            if all([check.check_dnanexus_id(file) for file in args["files"]]):
-                new_files = [dxpy.DXFile(file) for file in args["files"]]
+            if all(
+                [
+                    check.check_dnanexus_id(file)
+                    for file in args["dnanexus_file_ids"]
+                ]
+            ):
+                new_files = [
+                    dxpy.DXFile(file) for file in args["dnanexus_file_ids"]
+                ]
             else:
                 raise AssertionError(
-                    f"Provided files {args['files']} are not all DNAnexus "
-                    "file ids"
+                    f"Provided files {args['dnanexus_file_ids']} are not all "
+                    "DNAnexus file ids"
                 )
 
         else:
@@ -142,19 +149,30 @@ def main(**args):
 
             # if dnanexus file ids were specified no need for upload
             if args["dnanexus_file_ids"]:
-                folders = {}
+                dnanexus_data = {}
 
-                for file in new_files:
-                    folders.setdefault(file.folder, []).append(file)
+                for sample_id, files in sample_files.items():
+                    dnanexus_data.setdefault(sample_id, {})
+
+                    for file in files:
+                        for given_file in new_files:
+                            if file.id == given_file.id:
+                                dnanexus_data[sample_id].setdefault(
+                                    "files", []
+                                ).append(file)
+
+                                dnanexus_data[sample_id][
+                                    "folder"
+                                ] = file.folder
 
             else:
-                folders = dnanexus.upload_input_files(
+                dnanexus_data = dnanexus.upload_input_files(
                     date, sd_wgs_project, sample_files
                 )
                 print("Uploaded the files to DNAnexus")
 
             # starting the jobs
-            for folder, samples in folders.items():
+            for sample_id, data in dnanexus_data.items():
                 # setup dict with the columns that need to be populated
                 sample_data = {
                     column.name: None
@@ -164,10 +182,10 @@ def main(**args):
 
                 inputs = {}
 
-                for sample in samples:
+                for file in data["files"]:
                     inputs.update(
                         dnanexus.assign_dxfile_to_workbook_input(
-                            sample, patterns
+                            file, patterns
                         )
                     )
 
@@ -204,27 +222,27 @@ def main(**args):
                     },
                 }
 
-                job_id = dnanexus.start_wgs_workbook_job(
+                job = dnanexus.start_wgs_workbook_job(
                     all_inputs,
                     config_data["sd_wgs_workbook_app_id"],
-                    f"{folder}/output",
+                    f"{data['folder']}/output",
                 )
                 # job_id.wait_on_done(10)
 
                 # populate the dict
-                sample_data["referral_id"] = sample
+                sample_data["referral_id"] = sample_id
                 sample_data["specimen_id"] = ""
                 sample_data["date"] = date
                 sample_data["clinical_indication"] = ""
-                sample_data["job_id"] = job_id
+                sample_data["job_id"] = job.id
                 sample_data["job_status"] = ""
                 sample_data["processing_status"] = "Job started"
                 sample_data["workbook_location"] = (
-                    f"{config_data['project_id']}:{folder}/output"
+                    f"{config_data['project_id']}:{data['folder']}/output"
                 )
-                data.append(sample_data)
+                db_data.append(sample_data)
 
-            db.insert_in_db(session, sc_wgs_table, data)
+            db.insert_in_db(session, sc_wgs_table, db_data)
 
             print("Job started + successful db update")
 
