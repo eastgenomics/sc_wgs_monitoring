@@ -13,7 +13,7 @@ def main(**args):
 
     if args["time_to_check"]:
         assert args["time_to_check"].endswith(
-            ["s", "m", "h", "d"]
+            ("s", "m", "h", "d")
         ), "The time_to_check argument doesn't end with one of s|m|h|d"
 
     # override the values in the config file if the cli was used to override
@@ -108,6 +108,13 @@ def main(**args):
                         file, time_to_check
                     )
                 ]
+
+                if not new_files:
+                    print(
+                        "No new files modified in the last "
+                        f"{args['time_to_check']}. Exiting"
+                    )
+                    exit()
 
             supplementary_html = [
                 file
@@ -288,7 +295,7 @@ if __name__ == "__main__":
         "-t",
         "--time_to_check",
         required=False,
-        default=None,
+        default="",
         help=(
             "Time period in which to check for presence of new files. Please "
             "use s, m, h, d as suffixes i.e. 10s will check for files "
