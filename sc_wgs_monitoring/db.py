@@ -62,7 +62,11 @@ def look_for_processed_samples(
     res = session.execute(
         select(table.c.referral_id).filter_by(referral_id=sample_id)
     )
-    return res.one_or_none()
+
+    if res.one_or_none():
+        return sample_id
+    else:
+        return None
 
 
 def insert_in_db(session: Session, table: Table, data: List):
