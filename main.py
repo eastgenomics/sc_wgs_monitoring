@@ -134,12 +134,14 @@ def main(**args):
                 )
                 exit()
 
-            folders = dnanexus.upload_input_files(
-                date, sd_wgs_project, sample_files
-            )
+            if args["dnanexus_file_ids"]:
+                folders = {file.folder: file for file in new_files}
+            else:
+                folders = dnanexus.upload_input_files(
+                    date, sd_wgs_project, sample_files
+                )
 
             for folder, samples in folders.items():
-
                 # setup dict with the columns that need to be populated
                 sample_data = {
                     column.name: None
