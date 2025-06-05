@@ -173,6 +173,8 @@ def main(**args):
             if args["dnanexus_file_ids"]:
                 dnanexus_data = {}
 
+                # go through the dnanexus file ids and match them to the
+                # sample id
                 for sample_id, files in sample_files.items():
                     dnanexus_data.setdefault(sample_id, {})
 
@@ -212,36 +214,12 @@ def main(**args):
                     )
 
                 all_inputs = inputs | {
-                    "hotspots": {
+                    ref_input_name: {
                         "$dnanexus_link": config_data["workbook_inputs"][
-                            "hotspots"
+                            ref_input_name
                         ]
-                    },
-                    "reference_gene_groups": {
-                        "$dnanexus_link": config_data["workbook_inputs"][
-                            "reference_gene_groups"
-                        ]
-                    },
-                    "panelapp": {
-                        "$dnanexus_link": config_data["workbook_inputs"][
-                            "panelapp"
-                        ]
-                    },
-                    "cytological_bands": {
-                        "$dnanexus_link": config_data["workbook_inputs"][
-                            "cytological_bands"
-                        ]
-                    },
-                    "clinvar": {
-                        "$dnanexus_link": config_data["workbook_inputs"][
-                            "clinvar"
-                        ]
-                    },
-                    "clinvar_index": {
-                        "$dnanexus_link": config_data["workbook_inputs"][
-                            "clinvar_index"
-                        ]
-                    },
+                    }
+                    for ref_input_name in config_data["workbook_inputs"]
                 }
 
                 job = dnanexus.start_wgs_workbook_job(
@@ -272,36 +250,25 @@ def main(**args):
             # TODO probably send a slack log message
             print("Couldn't find any files")
 
-    # # check jobs that have finished
-    # if args["check_jobs"]:
-    #     executions = dxpy.bindings.find_executions(
-    #         executable=config_data["sd_wgs_workbook_app_id"],
-    #         project=sd_wgs_project,
-    #         created_after=args["time_to_check"],
-    #         describe=True,
-    #     )
+    # check jobs that have finished
+    if args["check_jobs"]:
+        executions = dxpy.bindings.find_executions(
+            executable=config_data["sd_wgs_workbook_app_id"],
+            project=sd_wgs_project,
+            created_after=args["time_to_check"],
+            describe=True,
+        )
 
-    #     for execution in executions:
-    #         for job_output in dnanexus.get_output_id(execution):
-    #             dxpy.bindings.dxfile_functions.download_dxfile(
-    #                 job_output, config_data["clingen_location"]
-    #             )
+        for execution in executions:
+            for job_output in dnanexus.get_output_id(execution):
+                dxpy.bindings.dxfile_functions.download_dxfile(
+                    job_output, config_data["clingen_location"]
+                )
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("dnanexus_token")
-    parser.add_argument(
-        "-t",
-        "--time_to_check",
-        required=False,
-        default="",
-        help=(
-            "Time period in which to check for presence of new files. Please "
-            "use s, m, h, d as suffixes i.e. 10s will check for files "
-            "MODIFIED in the last 10s"
-        ),
-    )
     parser.add_argument(
         "-config",
         "--config",
@@ -319,6 +286,17 @@ if __name__ == "__main__":
         "--dnanexus_file_ids",
         nargs="+",
         help="DNAnexus ids for the input of the workbook job",
+    )
+    parser.add_argument(
+        "-t",
+        "--time_to_check",
+        required=False,
+        default="",
+        help=(
+            "Time period in which to check for presence of new files. Please "
+            "use s, m, h, d as suffixes i.e. 10s will check for files "
+            "MODIFIED in the last 10s"
+        ),
     )
 
     type_processing = parser.add_mutually_exclusive_group()
