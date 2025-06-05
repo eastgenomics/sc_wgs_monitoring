@@ -23,7 +23,7 @@ def login_to_dnanexus(token: str):
 
 def upload_input_files(
     date: str, project: dxpy.DXProject, sample_files: Dict
-) -> list:
+) -> dict:
     """Upload the input files required for creating the WGS workbook
 
     Parameters
@@ -37,8 +37,8 @@ def upload_input_files(
 
     Returns
     -------
-    list
-        List of folders where the inputs were moved to
+    dict
+        Dict of samples and their files in dnanexus and their location
     """
 
     data = {}
