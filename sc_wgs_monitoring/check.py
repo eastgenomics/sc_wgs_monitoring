@@ -41,10 +41,10 @@ def check_file_input_name_is_correct(string: str, patterns: list) -> bool:
     """
 
     for pattern in patterns:
-        if not re.search(pattern, string):
-            return False
+        if re.search(pattern, string):
+            return True
 
-    return True
+    return False
 
 
 def check_if_file_exists(path: str) -> bool:
