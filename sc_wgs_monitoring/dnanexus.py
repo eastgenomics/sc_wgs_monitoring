@@ -86,9 +86,29 @@ def get_output_id(execution: Dict) -> str:
 
 
 def assign_dxfile_to_workbook_input(file: dxpy.DXFile, patterns: dict) -> dict:
+    """Assign DXFile to a workbook job input name
+
+    Parameters
+    ----------
+    file : dxpy.DXFile
+        DXFile object to assign to an input name
+    patterns : dict
+        Dict of the patterns with their associated input name
+
+    Returns
+    -------
+    dict
+        Dict containing the input name and the dnanexus link dict needed
+        for starting the job
+
+    Raises
+    ------
+    AssertionError
+        If the file name couldn't be associated with a pattern, raise error
+    """
     for pattern, input_name in patterns.items():
         if re.search(pattern, file.name):
-            return input_name, {"$dnanexus_link": file.id}
+            return {input_name: {"$dnanexus_link": file.id}}
 
     raise AssertionError(
         "Couldn't match a dnanexus filename to an expected workbook input name"
