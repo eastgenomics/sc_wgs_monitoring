@@ -11,6 +11,11 @@ from sc_wgs_monitoring import check, dnanexus, db, utils
 def main(**args):
     config_data = utils.load_config(args["config"])
 
+    if args["time_to_check"]:
+        assert args["time_to_check"].endswith(
+            ["s", "m", "h", "d"]
+        ), "The time_to_check argument doesn't end with one of s|m|h|d"
+
     # override the values in the config file if the cli was used to override
     for config_key in config_data:
         config_override_value = args.get(config_key, None)
@@ -91,9 +96,18 @@ def main(**args):
                 files = utils.find_files_in_clingen_input_location(
                     config_data["clingen_input_location"]
                 )
-                new_files = utils.filter_files_using_time_to_check(
-                    files, args["time_to_check"]
+
+                time_to_check = utils.convert_time_to_epoch(
+                    args["time_to_check"]
                 )
+
+                new_files = [
+                    file
+                    for file in files
+                    if check.filter_file_using_time_to_check(
+                        file, time_to_check
+                    )
+                ]
 
             supplementary_html = [
                 file
@@ -270,7 +284,17 @@ def main(**args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("dnanexus_token")
-    parser.add_argument("-t", "--time_to_check", required=False, default=None)
+    parser.add_argument(
+        "-t",
+        "--time_to_check",
+        required=False,
+        default=None,
+        help=(
+            "Time period in which to check for presence of new files. Please "
+            "use s, m, h, d as suffixes i.e. 10s will check for files "
+            "MODIFIED in the last 10s"
+        ),
+    )
     parser.add_argument(
         "-config",
         "--config",
