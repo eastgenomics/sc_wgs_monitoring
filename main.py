@@ -135,7 +135,11 @@ def main(**args):
                 exit()
 
             if args["dnanexus_file_ids"]:
-                folders = {file.folder: file for file in new_files}
+                folders = {}
+
+                for file in new_files:
+                    folders.setdefault(file.folder, []).append(file)
+
             else:
                 folders = dnanexus.upload_input_files(
                     date, sd_wgs_project, sample_files
