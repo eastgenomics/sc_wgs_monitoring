@@ -127,6 +127,8 @@ def start_wgs_workbook_job(
         Dict containing the inputs for the sample
     app_id : str
         DNAnexus app to use for running the job
+    output_folder : str
+        Output folder in DNAnexus for the job
 
     Returns
     -------
