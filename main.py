@@ -112,7 +112,8 @@ def main(**args):
             for file in new_files
         ):
             raise AssertionError(
-                f"The set of provided files is not correct. Expected files with the following patterns: {[
+                "The set of provided files is not correct. Expected files "
+                f"with the following patterns: {[
                     r'[-_]reported_structural_variants\..*\.csv',
                     r'[-_]reported_variants\..*\.csv',
                     r'\..*\.supplementary\.html',
