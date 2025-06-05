@@ -1,3 +1,4 @@
+import datetime
 from pathlib import Path
 import re
 
@@ -41,10 +42,10 @@ def check_file_input_name_is_correct(string: str, patterns: list) -> bool:
     """
 
     for pattern in patterns:
-        if not re.search(pattern, string):
-            return False
+        if re.search(pattern, string):
+            return True
 
-    return True
+    return False
 
 
 def check_if_file_exists(path: str) -> bool:
@@ -62,3 +63,28 @@ def check_if_file_exists(path: str) -> bool:
     """
 
     return True if Path(path).exists() else False
+
+
+def filter_file_using_time_to_check(file: Path, time_to_check: int):
+    """Check if the given file has been modified in the last x seconds
+
+    Parameters
+    ----------
+    file : Path
+        File to check
+    time_to_check : int
+        Integer representing the number of seconds
+
+    Returns
+    -------
+    bool
+        Bool to represent if the file has been modified in the last x seconds
+    """
+
+    now = datetime.datetime.today().timestamp()
+    last_modified_time = file.stat().st_mtime
+
+    if now - last_modified_time <= time_to_check:
+        return True
+    else:
+        return False
