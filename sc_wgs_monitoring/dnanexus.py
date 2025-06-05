@@ -41,23 +41,24 @@ def upload_input_files(
         List of folders where the inputs were moved to
     """
 
-    folders = {}
+    data = {}
 
     for sample, files in sample_files.items():
         folder = f"/{date}/{sample}"
-        folders.setdefault(folder, [])
+        data.setdefault(sample, {})
         dxpy.api.project_new_folder(
             project.id, input_params={"folder": folder, "parents": True}
         )
+        data[sample]["folder"] = folder
 
         for file in files:
             dxfile = dxpy.upload_local_file(
                 file, project=project.id, folder=folder
             )
 
-            folders[folder].append(dxfile)
+            data[sample].setdefault("files", []).append(dxfile)
 
-    return folders
+    return data
 
 
 def get_output_id(execution: Dict) -> str:
