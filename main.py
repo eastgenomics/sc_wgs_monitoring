@@ -86,7 +86,7 @@ def main(**args):
                 ):
                     raise AssertionError(
                         "One of the files given doesn't exist "
-                        f"{'|'.join([file for file in new_files])}"
+                        f"{'|'.join([file for file in args["local_files"]])}"
                     )
 
                 new_files = [Path(file) for file in args["local_files"]]
