@@ -30,13 +30,9 @@ def main(**args):
     )
     sc_wgs_table = meta.tables["sc_wgs_data"]
 
-    # TODO check if there are new files to process in clingen
-
     # DNAnexus setup things
     dnanexus.login_to_dnanexus(args["dnanexus_token"])
-    sd_wgs_project = dxpy.bindings.DXProject(
-        config_data["project_to_check_for_new_files"],
-    )
+    sd_wgs_project = dxpy.bindings.DXProject(config_data["project_id"])
     dxpy.set_workspace_id(sd_wgs_project.id)
 
     date = datetime.date.today().strftime("%y%m%d")
@@ -50,11 +46,11 @@ def main(**args):
     if args["start_jobs"]:
         data = []
         new_files = None
-        patterns = [
-            r"[-_]reported_structural_variants\..*\.csv",
-            r"[-_]reported_variants\..*\.csv",
-            r"\..*\.supplementary\.html",
-        ]
+        patterns = {
+            r"[-_]reported_structural_variants\..*\.csv": "reported_structural_variants",
+            r"[-_]reported_variants\..*\.csv": "reported_variants",
+            r"\..*\.supplementary\.html": "supplmentary_html",
+        }
 
         if args["dnanexus_file_ids"]:
             if all([utils.check_dnanexus_id(file) for file in args["files"]]):
@@ -91,9 +87,12 @@ def main(**args):
                 file.write(str(new_html))
 
         else:
-            # TODO check local clingen location for new files using the
-            # time_to_check parameter
-            pass
+            files = utils.find_files_in_clingen_input_location(
+                config_data["clingen_input_location"]
+            )
+            new_files = utils.filter_files_using_time_to_check(
+                files, args["time_to_check"]
+            )
 
         if not all(
             check.check_file_input_name_is_correct(file, patterns)
@@ -139,7 +138,8 @@ def main(**args):
                 date, sd_wgs_project, sample_files
             )
 
-            for folder, sample in folders.items():
+            for folder, samples in folders.items():
+
                 # setup dict with the columns that need to be populated
                 sample_data = {
                     column.name: None
@@ -147,7 +147,14 @@ def main(**args):
                     if column.name != "id"
                 }
 
-                inputs = {
+                inputs = {}
+
+                for sample in samples:
+                    inputs.update(
+                        dnanexus.assign_dxfile_to_workbook_input(sample)
+                    )
+
+                all_inputs = inputs | {
                     "hotspots": {"$dnanexus_link": config_data["hotspots"]},
                     "reference_gene_groups": {
                         "$dnanexus_link": config_data["reference_gene_groups"]
@@ -162,17 +169,24 @@ def main(**args):
                     },
                 }
 
-                dnanexus.start_wgs_workbook_job(
-                    inputs, config_data["sd_wgs_workbook_app_id"]
+                job_id = dnanexus.start_wgs_workbook_job(
+                    all_inputs,
+                    config_data["sd_wgs_workbook_app_id"],
+                    f"{folder}/output",
                 )
+                job_id.wait_on_done(10)
 
                 # populate the dict
-                sample_data["gel_id"] = sample
-                sample_data["date_added"] = date
-                sample_data["location_in_dnanexus"] = (
-                    f"{config_data['project_to_check_for_new_files']}:{folder}"
+                sample_data["referral_id"] = sample
+                sample_data["specimen_id"] = ""
+                sample_data["date"] = date
+                sample_data["clinical_indication"] = ""
+                sample_data["job_id"] = job_id
+                sample_data["job_status"] = ""
+                sample_data["processing_status"] = "Job started"
+                sample_data["workbook_location"] = (
+                    f"{config_data['project_id']}:{folder}/output"
                 )
-                sample_data["status"] = "Job started"
                 data.append(sample_data)
 
             db.insert_in_db(session, sc_wgs_table, data)
@@ -200,7 +214,7 @@ def main(**args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("dnanexus_token")
-    parser.add_argument("-t", "--time_to_check", required=False, default="-1d")
+    parser.add_argument("-t", "--time_to_check", required=False, default=None)
     parser.add_argument(
         "-config",
         "--config",
@@ -235,13 +249,13 @@ if __name__ == "__main__":
     )
     config_override.add_argument(
         "-project_id",
-        "--project_to_check_for_new_files",
-        help="Project ID in which to look for new files",
+        "--project_id",
+        help="Project ID in which to upload and process the workbooks",
     )
     config_override.add_argument(
         "-app_id",
         "--sd_wgs_workbook_app_id",
-        help="SD WGS workbook app ID in which to look for new files",
+        help="SD WGS workbook app ID",
     )
     config_override.add_argument(
         "-hotspots",
@@ -274,8 +288,15 @@ if __name__ == "__main__":
         help="clinvar_index parameter to override config data",
     )
     config_override.add_argument(
-        "-clingen_location",
-        "--clingen_location",
+        "-clingen_input_location",
+        "--clingen_input_location",
+        help=(
+            "Clingen location to check for data (used to override config data)"
+        ),
+    )
+    config_override.add_argument(
+        "-clingen_upload_location",
+        "--clingen_upload_location",
         help=(
             "Clingen location to upload data to (used to override config data)"
         ),
