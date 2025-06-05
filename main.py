@@ -1,5 +1,6 @@
 import argparse
 import datetime
+from pathlib import Path
 import re
 
 import dxpy
@@ -49,11 +50,12 @@ def main(**args):
         patterns = {
             r"[-_]reported_structural_variants\..*\.csv": "reported_structural_variants",
             r"[-_]reported_variants\..*\.csv": "reported_variants",
-            r"\..*\.supplementary\.html": "supplmentary_html",
+            r"\..*\.supplementary\.html": "supplementary_html",
         }
 
+        # handle given dnanexus file ids
         if args["dnanexus_file_ids"]:
-            if all([utils.check_dnanexus_id(file) for file in args["files"]]):
+            if all([check.check_dnanexus_id(file) for file in args["files"]]):
                 new_files = [dxpy.DXFile(file) for file in args["files"]]
             else:
                 raise AssertionError(
@@ -61,23 +63,35 @@ def main(**args):
                     "file ids"
                 )
 
-        elif args["local_files"]:
-            if not all(
-                [
-                    check.check_if_file_exists(file)
-                    for file in args["local_files"]
-                ]
-            ):
-                raise AssertionError(
-                    "One of the files given doesn't exist "
-                    f"{'|'.join([file for file in new_files])}"
+        else:
+            # handle specified local files to process
+            if args["local_files"]:
+                if not all(
+                    [
+                        check.check_if_file_exists(file)
+                        for file in args["local_files"]
+                    ]
+                ):
+                    raise AssertionError(
+                        "One of the files given doesn't exist "
+                        f"{'|'.join([file for file in new_files])}"
+                    )
+
+                new_files = [Path(file) for file in args["local_files"]]
+
+            # handle file detection
+            else:
+                files = utils.find_files_in_clingen_input_location(
+                    config_data["clingen_input_location"]
+                )
+                new_files = utils.filter_files_using_time_to_check(
+                    files, args["time_to_check"]
                 )
 
-            new_files = args["local_files"]
             supplementary_html = [
                 file
                 for file in new_files
-                if re.search(r".*\.supplementary\.html", file)
+                if re.search(r".*\.supplementary\.html", file.name)
             ][0]
             new_html = utils.remove_pid_div_from_supplementary_file(
                 supplementary_html, config_data["pid_div_id"]
@@ -86,16 +100,8 @@ def main(**args):
             with open(supplementary_html, "w") as file:
                 file.write(str(new_html))
 
-        else:
-            files = utils.find_files_in_clingen_input_location(
-                config_data["clingen_input_location"]
-            )
-            new_files = utils.filter_files_using_time_to_check(
-                files, args["time_to_check"]
-            )
-
         if not all(
-            check.check_file_input_name_is_correct(file, patterns)
+            check.check_file_input_name_is_correct(file.name, patterns)
             for file in new_files
         ):
             raise AssertionError(
@@ -104,7 +110,7 @@ def main(**args):
                     r'[-_]reported_variants\..*\.csv',
                     r'\..*\.supplementary\.html',
                 ]}. "
-                f"Got {"|".join([file for file in new_files])}"
+                f"Got {" | ".join([file.name for file in new_files])}"
             )
 
         if new_files:
@@ -134,6 +140,7 @@ def main(**args):
                 )
                 exit()
 
+            # if dnanexus file ids were specified no need for upload
             if args["dnanexus_file_ids"]:
                 folders = {}
 
@@ -144,7 +151,9 @@ def main(**args):
                 folders = dnanexus.upload_input_files(
                     date, sd_wgs_project, sample_files
                 )
+                print("Uploaded the files to DNAnexus")
 
+            # starting the jobs
             for folder, samples in folders.items():
                 # setup dict with the columns that need to be populated
                 sample_data = {
@@ -157,21 +166,41 @@ def main(**args):
 
                 for sample in samples:
                     inputs.update(
-                        dnanexus.assign_dxfile_to_workbook_input(sample)
+                        dnanexus.assign_dxfile_to_workbook_input(
+                            sample, patterns
+                        )
                     )
 
                 all_inputs = inputs | {
-                    "hotspots": {"$dnanexus_link": config_data["hotspots"]},
+                    "hotspots": {
+                        "$dnanexus_link": config_data["workbook_inputs"][
+                            "hotspots"
+                        ]
+                    },
                     "reference_gene_groups": {
-                        "$dnanexus_link": config_data["reference_gene_groups"]
+                        "$dnanexus_link": config_data["workbook_inputs"][
+                            "reference_gene_groups"
+                        ]
                     },
-                    "panelapp": {"$dnanexus_link": config_data["panelapp"]},
+                    "panelapp": {
+                        "$dnanexus_link": config_data["workbook_inputs"][
+                            "panelapp"
+                        ]
+                    },
                     "cytological_bands": {
-                        "$dnanexus_link": config_data["cytological_bands"]
+                        "$dnanexus_link": config_data["workbook_inputs"][
+                            "cytological_bands"
+                        ]
                     },
-                    "clinvar": {"$dnanexus_link": config_data["clinvar"]},
+                    "clinvar": {
+                        "$dnanexus_link": config_data["workbook_inputs"][
+                            "clinvar"
+                        ]
+                    },
                     "clinvar_index": {
-                        "$dnanexus_link": config_data["clinvar_index"]
+                        "$dnanexus_link": config_data["workbook_inputs"][
+                            "clinvar_index"
+                        ]
                     },
                 }
 
@@ -180,7 +209,7 @@ def main(**args):
                     config_data["sd_wgs_workbook_app_id"],
                     f"{folder}/output",
                 )
-                job_id.wait_on_done(10)
+                # job_id.wait_on_done(10)
 
                 # populate the dict
                 sample_data["referral_id"] = sample
@@ -197,24 +226,26 @@ def main(**args):
 
             db.insert_in_db(session, sc_wgs_table, data)
 
+            print("Job started + successful db update")
+
         else:
             # TODO probably send a slack log message
             print("Couldn't find any files")
 
-    # check jobs that have finished
-    if args["check_jobs"]:
-        executions = dxpy.bindings.find_executions(
-            executable=config_data["sd_wgs_workbook_app_id"],
-            project=sd_wgs_project,
-            created_after=args["time_to_check"],
-            describe=True,
-        )
+    # # check jobs that have finished
+    # if args["check_jobs"]:
+    #     executions = dxpy.bindings.find_executions(
+    #         executable=config_data["sd_wgs_workbook_app_id"],
+    #         project=sd_wgs_project,
+    #         created_after=args["time_to_check"],
+    #         describe=True,
+    #     )
 
-        for execution in executions:
-            for job_output in dnanexus.get_output_id(execution):
-                dxpy.bindings.dxfile_functions.download_dxfile(
-                    job_output, config_data["clingen_location"]
-                )
+    #     for execution in executions:
+    #         for job_output in dnanexus.get_output_id(execution):
+    #             dxpy.bindings.dxfile_functions.download_dxfile(
+    #                 job_output, config_data["clingen_location"]
+    #             )
 
 
 if __name__ == "__main__":
