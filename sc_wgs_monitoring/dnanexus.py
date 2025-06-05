@@ -1,4 +1,5 @@
 from typing import Dict
+import re
 
 import dxpy
 
@@ -44,14 +45,17 @@ def upload_input_files(
 
     for sample, files in sample_files.items():
         folder = f"/{date}/{sample}"
+        folders.setdefault(folder, [])
         dxpy.api.project_new_folder(
             project.id, input_params={"folder": folder, "parents": True}
         )
 
         for file in files:
-            dxpy.upload_local_file(file, project=project.id, folder=folder)
+            dxfile = dxpy.upload_local_file(
+                file, project=project.id, folder=folder
+            )
 
-        folders[folder] = sample
+            folders[folder].append(dxfile)
 
     return folders
 
@@ -81,7 +85,19 @@ def get_output_id(execution: Dict) -> str:
             return job_output
 
 
-def start_wgs_workbook_job(workbook_inputs: Dict, app_id: str) -> dxpy.DXJob:
+def assign_dxfile_to_workbook_input(file: dxpy.DXFile, patterns: dict) -> dict:
+    for pattern, input_name in patterns.items():
+        if re.search(pattern, file.name):
+            return input_name, {"$dnanexus_link": file.id}
+
+    raise AssertionError(
+        "Couldn't match a dnanexus filename to an expected workbook input name"
+    )
+
+
+def start_wgs_workbook_job(
+    workbook_inputs: Dict, app_id: str, output_folder: str
+) -> dxpy.DXJob:
     """Start the WHS Solid cancer workbook job
 
     Parameters
@@ -99,5 +115,5 @@ def start_wgs_workbook_job(workbook_inputs: Dict, app_id: str) -> dxpy.DXJob:
 
     return dxpy.bindings.dxapp.DXApp(dxid=app_id).run(
         workbook_inputs,
-        folder=f"{workbook_inputs['nextflow_pipeline_params']}/output",
+        folder=output_folder,
     )
