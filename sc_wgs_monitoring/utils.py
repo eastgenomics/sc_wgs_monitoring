@@ -1,6 +1,10 @@
-import json
+import importlib.util
+from pathlib import Path
 from typing import Dict
 import re
+import sys
+
+from bs4 import BeautifulSoup
 
 
 def load_config(config_file) -> Dict:
@@ -12,13 +16,18 @@ def load_config(config_file) -> Dict:
         Dict containing the keys for the various parameters used
     """
 
-    with open(config_file) as f:
-        config_data = json.loads(f.read())
+    config_path = Path(config_file)
 
-    return config_data
+    spec = importlib.util.spec_from_file_location(
+        config_path.name.replace(".py", ""), config_path
+    )
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[config_path.name] = module
+    spec.loader.exec_module(module)
+    return module.CONFIG
 
 
-def get_sample_id_from_files(files: list) -> Dict:
+def get_sample_id_from_files(files: list, patterns: list) -> Dict:
     """Get the sample id from the new files detected and link sample ids to
     their files
 
@@ -26,18 +35,14 @@ def get_sample_id_from_files(files: list) -> Dict:
     ----------
     files : list
         List of DNAnexus file objects
+    patterns : list
+        Expected patterns for the file name
 
     Returns
     -------
     Dict
         Dict containing the sample id and their files
     """
-
-    patterns = [
-        r"[-_]reported_structural_variants\..*\.csv",
-        r"[-_]reported_variants\..*\.csv",
-        r"\..*\.supplementary\.html",
-    ]
 
     detected_sample_ids = set()
 
@@ -67,3 +72,29 @@ def get_sample_id_from_files(files: list) -> Dict:
     assert all(file_dict)
 
     return file_dict
+
+
+def remove_pid_div_from_supplementary_file(
+    file: str, pid_div_id: str
+) -> BeautifulSoup:
+    """Remove the div with personal identifiable data from the supplementary
+    HTML
+
+    Parameters
+    ----------
+    file : str
+        File path to the supplementary HTML file
+    pid_div_id : str
+        Id of the div to look for in the HTML file
+
+    Returns
+    -------
+    BeautifulSoup
+        BeautifulSoup object containing the HTML supplementary without the PID
+        div
+    """
+
+    with open(file) as f:
+        soup = BeautifulSoup(f, "html.parser")
+        soup.find("div", id=pid_div_id).decompose()
+        return soup

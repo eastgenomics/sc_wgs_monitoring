@@ -12,5 +12,3 @@ RUN \
     xargs rm -rf {} && \
     rm -rf /root/.cache/pip && \
     apk --purge del gcc musl-dev linux-headers
-
-CMD [ "python3", "/app/sc_wgs_monitoring/main.py", "--help" ]
