@@ -85,6 +85,8 @@ def get_output_id(execution: Dict) -> str:
         if len(job_output) == 1:
             return job_output
 
+    raise AssertionError(f"{execution['id']} is probably not done.")
+
 
 def assign_dxfile_to_workbook_input(file: dxpy.DXFile, patterns: dict) -> dict:
     """Assign DXFile to a workbook job input name
@@ -117,7 +119,10 @@ def assign_dxfile_to_workbook_input(file: dxpy.DXFile, patterns: dict) -> dict:
 
 
 def start_wgs_workbook_job(
-    workbook_inputs: Dict, app_id: str, output_folder: str
+    workbook_inputs: Dict,
+    app: dxpy.DXApp,
+    job_name: str,
+    output_folder: str,
 ) -> dxpy.DXJob:
     """Start the WHS Solid cancer workbook job
 
@@ -136,7 +141,4 @@ def start_wgs_workbook_job(
         DXJob object
     """
 
-    return dxpy.bindings.dxapp.DXApp(dxid=app_id).run(
-        workbook_inputs,
-        folder=output_folder,
-    )
+    return app.run(workbook_inputs, name=job_name, folder=output_folder)
