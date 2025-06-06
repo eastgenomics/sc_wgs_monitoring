@@ -1,5 +1,6 @@
 import argparse
 import datetime
+import multiprocessing
 from pathlib import Path
 import re
 
@@ -40,6 +41,9 @@ def main(**args):
     dnanexus.login_to_dnanexus(args["dnanexus_token"])
     sd_wgs_project = dxpy.bindings.DXProject(config_data["project_id"])
     dxpy.set_workspace_id(sd_wgs_project.id)
+    sc_wgs_workbook_app = dxpy.bindings.dxapp.DXApp(
+        dxid=config_data["sd_wgs_workbook_app_id"]
+    )
 
     date = datetime.date.today().strftime("%y%m%d")
 
@@ -58,20 +62,20 @@ def main(**args):
             r"\..*\.supplementary\.html": "supplementary_html",
         }
 
-        # handle given dnanexus file ids
-        if args["dnanexus_file_ids"]:
+        # handle given dnanexus ids
+        if args["dnanexus_ids"]:
             if all(
                 [
                     check.check_dnanexus_id(file)
-                    for file in args["dnanexus_file_ids"]
+                    for file in args["dnanexus_ids"]
                 ]
             ):
                 new_files = [
-                    dxpy.DXFile(file) for file in args["dnanexus_file_ids"]
+                    dxpy.DXFile(file) for file in args["dnanexus_ids"]
                 ]
             else:
                 raise AssertionError(
-                    f"Provided files {args['dnanexus_file_ids']} are not all "
+                    f"Provided files {args['dnanexus_ids']} are not all "
                     "DNAnexus file ids"
                 )
 
@@ -116,11 +120,13 @@ def main(**args):
                     )
                     exit()
 
+            # find the html file and remove the pid div from it
             supplementary_html = [
                 file
                 for file in new_files
                 if re.search(r".*\.supplementary\.html", file.name)
             ][0]
+
             new_html = utils.remove_pid_div_from_supplementary_file(
                 supplementary_html, config_data["pid_div_id"]
             )
@@ -128,6 +134,7 @@ def main(**args):
             with open(supplementary_html, "w") as file:
                 file.write(str(new_html))
 
+        # check if the files have expected suffixes
         if not all(
             check.check_file_input_name_is_correct(file.name, patterns)
             for file in new_files
@@ -195,15 +202,10 @@ def main(**args):
                 )
                 print("Uploaded the files to DNAnexus")
 
-            # starting the jobs
-            for sample_id, data in dnanexus_data.items():
-                # setup dict with the columns that need to be populated
-                sample_data = {
-                    column.name: None
-                    for column in sc_wgs_table.columns
-                    if column.name != "id"
-                }
+            args_for_starting_jobs = []
 
+            # organise data for preparation for starting the jobs
+            for sample_id, data in dnanexus_data.items():
                 inputs = {}
 
                 for file in data["files"]:
@@ -213,21 +215,50 @@ def main(**args):
                         )
                     )
 
-                all_inputs = inputs | {
-                    ref_input_name: {
-                        "$dnanexus_link": config_data["workbook_inputs"][
-                            ref_input_name
-                        ]
-                    }
-                    for ref_input_name in config_data["workbook_inputs"]
-                }
-
-                job = dnanexus.start_wgs_workbook_job(
-                    all_inputs,
-                    config_data["sd_wgs_workbook_app_id"],
+                args_for_starting_jobs.append(
+                    (
+                        inputs
+                        | {
+                            ref_input_name: {
+                                "$dnanexus_link": config_data[
+                                    "workbook_inputs"
+                                ][ref_input_name]
+                            }
+                            for ref_input_name in config_data[
+                                "workbook_inputs"
+                            ]
+                        }
+                    ),
+                    sc_wgs_workbook_app,
+                    f"{sample_id} | {sc_wgs_workbook_app.name}"
                     f"{data['folder']}/output",
                 )
-                # job_id.wait_on_done(10)
+
+            # start the jobs
+            with multiprocessing.Pool(processes=10) as pool:
+                job_ids = pool.starmap(
+                    dnanexus.start_wgs_workbook_job, args_for_starting_jobs
+                )
+
+            print("Jobs started")
+
+            jobs = []
+
+            for job_id in job_ids:
+                job = dxpy.DXJob(job_id)
+                jobs.append(job)
+
+                sample_id = job.name.split(" | ")[0]
+
+                if sample_id in dnanexus_data:
+                    dnanexus[sample_id]["job"] = job
+
+                # setup dict with the columns that need to be populated
+                sample_data = {
+                    column.name: None
+                    for column in sc_wgs_table.columns
+                    if column.name != "id"
+                }
 
                 # populate the dict
                 sample_data["referral_id"] = sample_id
@@ -244,7 +275,14 @@ def main(**args):
 
             db.insert_in_db(session, sc_wgs_table, db_data)
 
-            print("Job started + successful db update")
+            print("Successful db update")
+
+            for job in jobs:
+                job.wait_on_done(10)
+
+            # TODO update database with the job status
+            # TODO download files in the upload location
+            # TODO update database with clingen location?
 
         else:
             # TODO probably send a slack log message
@@ -252,17 +290,24 @@ def main(**args):
 
     # check jobs that have finished
     if args["check_jobs"]:
-        executions = dxpy.bindings.find_executions(
-            executable=config_data["sd_wgs_workbook_app_id"],
-            project=sd_wgs_project,
-            created_after=args["time_to_check"],
-            describe=True,
-        )
+        if args["dnanexus_ids"]:
+            executions = [
+                dxpy.DXJob(dxid=job_id).describe()
+                for job_id in args["dnanexus_ids"]
+            ]
+        else:
+            executions = dxpy.bindings.find_executions(
+                executable=config_data["sd_wgs_workbook_app_id"],
+                project=sd_wgs_project,
+                created_after=f"-{args['time_to_check']}",
+            )
 
         for execution in executions:
-            for job_output in dnanexus.get_output_id(execution):
+            job = dxpy.DXJob(execution["id"])
+
+            for job_output in dnanexus.get_output_id(job.describe()):
                 dxpy.bindings.dxfile_functions.download_dxfile(
-                    job_output, config_data["clingen_location"]
+                    job_output, config_data["clingen_upload_location"]
                 )
 
 
@@ -283,9 +328,12 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "-ids",
-        "--dnanexus_file_ids",
+        "--dnanexus_ids",
         nargs="+",
-        help="DNAnexus ids for the input of the workbook job",
+        help=(
+            "DNAnexus ids either for providing inputs for the workbook jobs "
+            "or job ids for checking jobs"
+        ),
     )
     parser.add_argument(
         "-t",
@@ -301,10 +349,18 @@ if __name__ == "__main__":
 
     type_processing = parser.add_mutually_exclusive_group()
     type_processing.add_argument(
-        "-s", "--start_jobs", action="store_true", default=False
+        "-s",
+        "--start_jobs",
+        action="store_true",
+        default=False,
+        help="Flag argument required for starting jobs",
     )
     type_processing.add_argument(
-        "-c", "--check_jobs", action="store_true", default=False
+        "-c",
+        "--check_jobs",
+        action="store_true",
+        default=False,
+        help="Flag argument required for checking jobs",
     )
 
     subparser = parser.add_subparsers(help="")
