@@ -153,6 +153,17 @@ def main(**args):
             # group files per id as a sense check
             sample_files = utils.get_sample_id_from_files(new_files, patterns)
 
+            message = ""
+
+            # build report message for samples and their files
+            for sample, files in sample_files.items():
+                message += f"- {sample}\n"
+
+                for file in files:
+                    message += f"  - {file.name}\n"
+
+            print(f"Detected the following files for processing:\n{message}")
+
             # query the database to find samples that have already been
             # processed
             processed_samples = [
@@ -177,7 +188,7 @@ def main(**args):
                 exit()
 
             # if dnanexus file ids were specified no need for upload
-            if args["dnanexus_file_ids"]:
+            if args["dnanexus_ids"]:
                 dnanexus_data = {}
 
                 # go through the dnanexus file ids and match them to the
@@ -227,31 +238,26 @@ def main(**args):
                             for ref_input_name in config_data[
                                 "workbook_inputs"
                             ]
-                        }
-                    ),
-                    sc_wgs_workbook_app,
-                    f"{sample_id} | {sc_wgs_workbook_app.name}"
-                    f"{data['folder']}/output",
+                        },
+                        sc_wgs_workbook_app,
+                        f"{sc_wgs_workbook_app.name} | {sample_id}",
+                        f"{data['folder']}/output",
+                    )
                 )
 
             # start the jobs
             with multiprocessing.Pool(processes=10) as pool:
-                job_ids = pool.starmap(
+                jobs = pool.starmap(
                     dnanexus.start_wgs_workbook_job, args_for_starting_jobs
                 )
 
             print("Jobs started")
 
-            jobs = []
-
-            for job_id in job_ids:
-                job = dxpy.DXJob(job_id)
-                jobs.append(job)
-
-                sample_id = job.name.split(" | ")[0]
+            for job in jobs:
+                sample_id = job.name.split(" | ")[1]
 
                 if sample_id in dnanexus_data:
-                    dnanexus[sample_id]["job"] = job
+                    dnanexus_data[sample_id]["job"] = job
 
                 # setup dict with the columns that need to be populated
                 sample_data = {
@@ -268,7 +274,7 @@ def main(**args):
                 sample_data["job_id"] = job.id
                 sample_data["job_status"] = ""
                 sample_data["processing_status"] = "Job started"
-                sample_data["workbook_location"] = (
+                sample_data["workbook_dnanexus_location"] = (
                     f"{config_data['project_id']}:{data['folder']}/output"
                 )
                 db_data.append(sample_data)
@@ -278,11 +284,39 @@ def main(**args):
             print("Successful db update")
 
             for job in jobs:
-                job.wait_on_done(10)
+                try:
+                    job.wait_on_done(10)
+                except dxpy.exceptions.DXJobFailureError:
+                    # TODO inform bioinformatics team
+                    pass
 
-            # TODO update database with the job status
-            # TODO download files in the upload location
-            # TODO update database with clingen location?
+            # check the job statuses, update the db and download the files in
+            # the appropriate locations
+            for sample, data in dnanexus_data.items():
+                # get job status
+                job_status = data["job"].state
+
+                db.update_in_db(
+                    session, sc_wgs_table, sample, {"job_status": job_status}
+                )
+
+                if job_status == "done":
+                    output_id = dnanexus.get_output_id(job.describe())
+                    dxpy.bindings.dxfile_functions.download_dxfile(
+                        output_id,
+                        f"{config_data['clingen_upload_location']}/{sample}.xlsx",
+                    )
+
+                    db.update_in_db(
+                        session,
+                        sc_wgs_table,
+                        sample,
+                        {
+                            "workbook_clingen_location": config_data[
+                                "clingen_upload_location"
+                            ]
+                        },
+                    )
 
         else:
             # TODO probably send a slack log message
@@ -303,11 +337,58 @@ def main(**args):
             )
 
         for execution in executions:
+            sample_data = {}
             job = dxpy.DXJob(execution["id"])
+            supplementary_html_file = dxpy.DXFile(
+                execution["runInput"]["supplementary_html"]["$dnanexus_link"]
+            )
+            sample_id = supplementary_html_file.name.split(".")[0]
 
-            for job_output in dnanexus.get_output_id(job.describe()):
+            # get job status
+            job_status = job.state
+
+            is_in_db = db.look_for_processed_samples(
+                session, sc_wgs_table, sample_id
+            )
+
+            if is_in_db is None:
+                # populate the dict
+                sample_data["referral_id"] = sample_id
+                sample_data["specimen_id"] = ""
+                sample_data["date"] = date
+                sample_data["clinical_indication"] = ""
+                sample_data["job_id"] = job.id
+                sample_data["job_status"] = job.state
+                sample_data["processing_status"] = "Job completed"
+                sample_data["workbook_dnanexus_location"] = (
+                    f"{config_data['project_id']}:{supplementary_html_file.folder}/output"
+                )
+                db.insert_in_db(session, sc_wgs_table, [sample_data])
+
+            else:
+                db.update_in_db(
+                    session,
+                    sc_wgs_table,
+                    sample_id,
+                    {"job_status": job_status},
+                )
+
+            if job_status == "done":
+                output_id = dnanexus.get_output_id(job.describe())
                 dxpy.bindings.dxfile_functions.download_dxfile(
-                    job_output, config_data["clingen_upload_location"]
+                    output_id,
+                    f"{config_data['clingen_upload_location']}/{sample_id}.xlsx",
+                )
+
+                db.update_in_db(
+                    session,
+                    sc_wgs_table,
+                    sample_id,
+                    {
+                        "workbook_clingen_location": config_data[
+                            "clingen_upload_location"
+                        ]
+                    },
                 )
 
 
