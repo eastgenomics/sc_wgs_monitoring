@@ -141,6 +141,10 @@ def convert_time_to_epoch(time: str) -> int:
     """
 
     match = re.search(r"[smhd]", time)
+
+    if not match:
+        raise AssertionError("No handled unit detected")
+
     unit = match.group(0)
 
     time_without_unit = int(time.strip(unit))
@@ -153,5 +157,3 @@ def convert_time_to_epoch(time: str) -> int:
         return time_without_unit * 3600
     elif unit == "d":
         return time_without_unit * 3600 * 24
-    else:
-        raise AssertionError("No handled unit detected")
