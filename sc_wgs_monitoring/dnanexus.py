@@ -75,17 +75,8 @@ def get_output_id(execution: Dict) -> str:
         File id of the WGS workbook job output
     """
 
-    if execution["describe"]["state"] == "done":
-        job_output = [
-            output_id
-            for output_id in execution["output"]["published_files"].values()
-        ]
-
-        # sense check we have one output only
-        if len(job_output) == 1:
-            return job_output
-
-    raise AssertionError(f"{execution['id']} is probably not done.")
+    job_output = execution["output"]["workbook"]["$dnanexus_link"]
+    return job_output
 
 
 def assign_dxfile_to_workbook_input(file: dxpy.DXFile, patterns: dict) -> dict:
