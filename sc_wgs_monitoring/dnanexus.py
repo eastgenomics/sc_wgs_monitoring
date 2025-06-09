@@ -119,7 +119,7 @@ def assign_dxfile_to_workbook_input(file: dxpy.DXFile, patterns: dict) -> dict:
 def start_wgs_workbook_job(
     workbook_inputs: Dict, app_id: str, output_folder: str
 ) -> dxpy.DXJob:
-    """Start the WHS Solid cancer workbook job
+    """Start the WGS Solid cancer workbook job
 
     Parameters
     ----------
