@@ -96,5 +96,64 @@ def remove_pid_div_from_supplementary_file(
 
     with open(file) as f:
         soup = BeautifulSoup(f, "html.parser")
-        soup.find("div", id=pid_div_id).decompose()
+        pid_div = soup.find("div", id=pid_div_id)
+
+        if pid_div is not None:
+            pid_div.decompose()
+
         return soup
+
+
+def find_files_in_clingen_input_location(location: str) -> list:
+    """Return all files present in the given location
+
+    Parameters
+    ----------
+    location : str
+        Path in which to look for files
+
+    Returns
+    -------
+    list
+        List of all the files present at that location
+    """
+
+    return [path for path in Path(location).iterdir()]
+
+
+def convert_time_to_epoch(time: str) -> int:
+    """Convert provided time from the user to Epoch
+
+    Parameters
+    ----------
+    time : str
+        String representing the time to convert
+
+    Returns
+    -------
+    int
+        Integer representing Epoch
+
+    Raises
+    ------
+    AssertionError
+        If the time doesn't end with the appropriate suffix
+    """
+
+    match = re.search(r"[smhd]", time)
+
+    if not match:
+        raise AssertionError("No handled unit detected")
+
+    unit = match.group(0)
+
+    time_without_unit = int(time.strip(unit))
+
+    if unit == "s":
+        return time_without_unit
+    elif unit == "m":
+        return time_without_unit * 60
+    elif unit == "h":
+        return time_without_unit * 3600
+    elif unit == "d":
+        return time_without_unit * 3600 * 24

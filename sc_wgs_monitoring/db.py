@@ -59,8 +59,14 @@ def look_for_processed_samples(
         String with the result of the query
     """
 
-    res = session.execute(select(table.c.gel_id).filter_by(gel_id=sample_id))
-    return res.one_or_none()[0]
+    res = session.execute(
+        select(table.c.referral_id).filter_by(referral_id=sample_id)
+    )
+
+    if res.one_or_none():
+        return sample_id
+    else:
+        return None
 
 
 def insert_in_db(session: Session, table: Table, data: List):

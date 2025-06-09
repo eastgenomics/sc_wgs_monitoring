@@ -1,5 +1,6 @@
 import argparse
 import datetime
+from pathlib import Path
 import re
 
 import dxpy
@@ -10,18 +11,22 @@ from sc_wgs_monitoring import check, dnanexus, db, utils
 def main(**args):
     config_data = utils.load_config(args["config"])
 
+    if args["time_to_check"]:
+        assert args["time_to_check"].endswith(
+            ("s", "m", "h", "d")
+        ), "The time_to_check argument doesn't end with one of s|m|h|d"
+
     # override the values in the config file if the cli was used to override
-    for config_key in [
-        "hotspots",
-        "refgene_group",
-        "clinvar",
-        "clinvar_index",
-        "clingen_location",
-    ]:
+    for config_key in config_data:
         config_override_value = args.get(config_key, None)
 
         if config_override_value:
             config_data[config_key] = config_override_value
+        else:
+            if config_key in config_data["workbook_inputs"]:
+                config_data["workbook_inputs"][
+                    config_key
+                ] = config_override_value
 
     # Database setup things
     session, meta = db.connect_to_db(
@@ -31,13 +36,9 @@ def main(**args):
     )
     sc_wgs_table = meta.tables["sc_wgs_data"]
 
-    # TODO check if there are new files to process in clingen
-
     # DNAnexus setup things
     dnanexus.login_to_dnanexus(args["dnanexus_token"])
-    sd_wgs_project = dxpy.bindings.DXProject(
-        config_data["project_to_check_for_new_files"],
-    )
+    sd_wgs_project = dxpy.bindings.DXProject(config_data["project_id"])
     dxpy.set_workspace_id(sd_wgs_project.id)
 
     date = datetime.date.today().strftime("%y%m%d")
@@ -49,40 +50,76 @@ def main(**args):
 
     # start WGS workbook jobs
     if args["start_jobs"]:
-        data = []
+        db_data = []
         new_files = None
-        patterns = [
-            r"[-_]reported_structural_variants\..*\.csv",
-            r"[-_]reported_variants\..*\.csv",
-            r"\..*\.supplementary\.html",
-        ]
+        patterns = {
+            r"[-_]reported_structural_variants\..*\.csv": "reported_structural_variants",
+            r"[-_]reported_variants\..*\.csv": "reported_variants",
+            r"\..*\.supplementary\.html": "supplementary_html",
+        }
 
+        # handle given dnanexus file ids
         if args["dnanexus_file_ids"]:
-            if all([utils.check_dnanexus_id(file) for file in args["files"]]):
-                new_files = [dxpy.DXFile(file) for file in args["files"]]
-            else:
-                raise AssertionError(
-                    f"Provided files {args['files']} are not all DNAnexus "
-                    "file ids"
-                )
-
-        elif args["local_files"]:
-            if not all(
+            if all(
                 [
-                    check.check_if_file_exists(file)
-                    for file in args["local_files"]
+                    check.check_dnanexus_id(file)
+                    for file in args["dnanexus_file_ids"]
                 ]
             ):
+                new_files = [
+                    dxpy.DXFile(file) for file in args["dnanexus_file_ids"]
+                ]
+            else:
                 raise AssertionError(
-                    "One of the files given doesn't exist "
-                    f"{'|'.join([file for file in new_files])}"
+                    f"Provided files {args['dnanexus_file_ids']} are not all "
+                    "DNAnexus file ids"
                 )
 
-            new_files = args["local_files"]
+        else:
+            # handle specified local files to process
+            if args["local_files"]:
+                if not all(
+                    [
+                        check.check_if_file_exists(file)
+                        for file in args["local_files"]
+                    ]
+                ):
+                    raise AssertionError(
+                        "One of the files given doesn't exist "
+                        f"{'|'.join([file for file in args["local_files"]])}"
+                    )
+
+                new_files = [Path(file) for file in args["local_files"]]
+
+            # handle file detection
+            else:
+                files = utils.find_files_in_clingen_input_location(
+                    config_data["clingen_input_location"]
+                )
+
+                time_to_check = utils.convert_time_to_epoch(
+                    args["time_to_check"]
+                )
+
+                new_files = [
+                    file
+                    for file in files
+                    if check.filter_file_using_time_to_check(
+                        file, time_to_check
+                    )
+                ]
+
+                if not new_files:
+                    print(
+                        "No new files modified in the last "
+                        f"{args['time_to_check']}. Exiting"
+                    )
+                    exit()
+
             supplementary_html = [
                 file
                 for file in new_files
-                if re.search(r".*\.supplementary\.html", file)
+                if re.search(r".*\.supplementary\.html", file.name)
             ][0]
             new_html = utils.remove_pid_div_from_supplementary_file(
                 supplementary_html, config_data["pid_div_id"]
@@ -91,25 +128,18 @@ def main(**args):
             with open(supplementary_html, "w") as file:
                 file.write(str(new_html))
 
-        else:
-            new_files = list(
-                dxpy.bindings.find_data_objects(
-                    project=sd_wgs_project.id,
-                    created_after=f"-{args['time_to_check']}",
-                )
-            )
-
         if not all(
-            check.check_file_input_name_is_correct(file, patterns)
+            check.check_file_input_name_is_correct(file.name, patterns)
             for file in new_files
         ):
             raise AssertionError(
-                f"The set of provided files is not correct. Expected files with the following patterns: {[
+                "The set of provided files is not correct. Expected files "
+                f"with the following patterns: {[
                     r'[-_]reported_structural_variants\..*\.csv',
                     r'[-_]reported_variants\..*\.csv',
                     r'\..*\.supplementary\.html',
                 ]}. "
-                f"Got {"|".join([file for file in new_files])}"
+                f"Got {" | ".join([file.name for file in new_files])}"
             )
 
         if new_files:
@@ -128,18 +158,43 @@ def main(**args):
             if any(processed_samples):
                 # remove all processed samples from dict to be passed
                 for sample_id in processed_samples:
+                    print(f"{sample_id} has already been processed")
                     del sample_files[sample_id]
 
             # all samples were removed
             if not sample_files:
-                print("All files detected have already been processed")
+                print(
+                    "All files detected have already been processed. "
+                    "Exiting..."
+                )
                 exit()
 
-            folders = dnanexus.move_inputs_in_new_folders(
-                date, sd_wgs_project, sample_files
-            )
+            # if dnanexus file ids were specified no need for upload
+            if args["dnanexus_file_ids"]:
+                dnanexus_data = {}
 
-            for folder, sample in folders.items():
+                for sample_id, files in sample_files.items():
+                    dnanexus_data.setdefault(sample_id, {})
+
+                    for file in files:
+                        for given_file in new_files:
+                            if file.id == given_file.id:
+                                dnanexus_data[sample_id].setdefault(
+                                    "files", []
+                                ).append(file)
+
+                                dnanexus_data[sample_id][
+                                    "folder"
+                                ] = file.folder
+
+            else:
+                dnanexus_data = dnanexus.upload_input_files(
+                    date, sd_wgs_project, sample_files
+                )
+                print("Uploaded the files to DNAnexus")
+
+            # starting the jobs
+            for sample_id, data in dnanexus_data.items():
                 # setup dict with the columns that need to be populated
                 sample_data = {
                     column.name: None
@@ -147,57 +202,106 @@ def main(**args):
                     if column.name != "id"
                 }
 
-                inputs = {
-                    "hotspots": {"$dnanexus_link": config_data["hotspots"]},
-                    "refgene_group": {
-                        "$dnanexus_link": config_data["refgene_group"]
+                inputs = {}
+
+                for file in data["files"]:
+                    inputs.update(
+                        dnanexus.assign_dxfile_to_workbook_input(
+                            file, patterns
+                        )
+                    )
+
+                all_inputs = inputs | {
+                    "hotspots": {
+                        "$dnanexus_link": config_data["workbook_inputs"][
+                            "hotspots"
+                        ]
                     },
-                    "clinvar": {"$dnanexus_link": config_data["clinvar"]},
+                    "reference_gene_groups": {
+                        "$dnanexus_link": config_data["workbook_inputs"][
+                            "reference_gene_groups"
+                        ]
+                    },
+                    "panelapp": {
+                        "$dnanexus_link": config_data["workbook_inputs"][
+                            "panelapp"
+                        ]
+                    },
+                    "cytological_bands": {
+                        "$dnanexus_link": config_data["workbook_inputs"][
+                            "cytological_bands"
+                        ]
+                    },
+                    "clinvar": {
+                        "$dnanexus_link": config_data["workbook_inputs"][
+                            "clinvar"
+                        ]
+                    },
                     "clinvar_index": {
-                        "$dnanexus_link": config_data["clinvar_index"]
+                        "$dnanexus_link": config_data["workbook_inputs"][
+                            "clinvar_index"
+                        ]
                     },
-                    "nextflow_pipeline_params": folder,
                 }
 
-                dnanexus.start_wgs_workbook_job(
-                    inputs, config_data["sd_wgs_workbook_app_id"]
+                job = dnanexus.start_wgs_workbook_job(
+                    all_inputs,
+                    config_data["sd_wgs_workbook_app_id"],
+                    f"{data['folder']}/output",
                 )
+                # job_id.wait_on_done(10)
 
                 # populate the dict
-                sample_data["gel_id"] = sample
-                sample_data["date_added"] = date
-                sample_data["location_in_dnanexus"] = (
-                    f"{config_data['project_to_check_for_new_files']}:{folder}"
+                sample_data["referral_id"] = sample_id
+                sample_data["specimen_id"] = ""
+                sample_data["date"] = date
+                sample_data["clinical_indication"] = ""
+                sample_data["job_id"] = job.id
+                sample_data["job_status"] = ""
+                sample_data["processing_status"] = "Job started"
+                sample_data["workbook_location"] = (
+                    f"{config_data['project_id']}:{data['folder']}/output"
                 )
-                sample_data["status"] = "Job started"
-                data.append(sample_data)
+                db_data.append(sample_data)
 
-            db.insert_in_db(session, sc_wgs_table, data)
+            db.insert_in_db(session, sc_wgs_table, db_data)
+
+            print("Job started + successful db update")
 
         else:
             # TODO probably send a slack log message
             print("Couldn't find any files")
 
-    # check jobs that have finished
-    if args["check_jobs"]:
-        executions = dxpy.bindings.find_executions(
-            executable=config_data["sd_wgs_workbook_app_id"],
-            project=sd_wgs_project,
-            created_after=args["time_to_check"],
-            describe=True,
-        )
+    # # check jobs that have finished
+    # if args["check_jobs"]:
+    #     executions = dxpy.bindings.find_executions(
+    #         executable=config_data["sd_wgs_workbook_app_id"],
+    #         project=sd_wgs_project,
+    #         created_after=args["time_to_check"],
+    #         describe=True,
+    #     )
 
-        for execution in executions:
-            for job_output in dnanexus.get_output_id(execution):
-                dxpy.bindings.dxfile_functions.download_dxfile(
-                    job_output, config_data["clingen_location"]
-                )
+    #     for execution in executions:
+    #         for job_output in dnanexus.get_output_id(execution):
+    #             dxpy.bindings.dxfile_functions.download_dxfile(
+    #                 job_output, config_data["clingen_location"]
+    #             )
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("dnanexus_token")
-    parser.add_argument("-t", "--time_to_check", required=False, default="-1d")
+    parser.add_argument(
+        "-t",
+        "--time_to_check",
+        required=False,
+        default="",
+        help=(
+            "Time period in which to check for presence of new files. Please "
+            "use s, m, h, d as suffixes i.e. 10s will check for files "
+            "MODIFIED in the last 10s"
+        ),
+    )
     parser.add_argument(
         "-config",
         "--config",
@@ -232,13 +336,13 @@ if __name__ == "__main__":
     )
     config_override.add_argument(
         "-project_id",
-        "--project_to_check_for_new_files",
-        help="Project ID in which to look for new files",
+        "--project_id",
+        help="Project ID in which to upload and process the workbooks",
     )
     config_override.add_argument(
         "-app_id",
         "--sd_wgs_workbook_app_id",
-        help="SD WGS workbook app ID in which to look for new files",
+        help="SD WGS workbook app ID",
     )
     config_override.add_argument(
         "-hotspots",
@@ -246,9 +350,19 @@ if __name__ == "__main__":
         help="hotspots parameter to override config data",
     )
     config_override.add_argument(
-        "-refgene_group",
-        "--refgene_group",
-        help="refgene_group parameter to override config data",
+        "-reference_gene_groups",
+        "--reference_gene_groups",
+        help="reference_gene_groups parameter to override config data",
+    )
+    config_override.add_argument(
+        "-panelapp",
+        "--panelapp",
+        help="panelapp parameter to override config data",
+    )
+    config_override.add_argument(
+        "-cytological_bands",
+        "--cytological_bands",
+        help="cytological_bands parameter to override config data",
     )
     config_override.add_argument(
         "-clinvar",
@@ -261,8 +375,15 @@ if __name__ == "__main__":
         help="clinvar_index parameter to override config data",
     )
     config_override.add_argument(
-        "-clingen_location",
-        "--clingen_location",
+        "-clingen_input_location",
+        "--clingen_input_location",
+        help=(
+            "Clingen location to check for data (used to override config data)"
+        ),
+    )
+    config_override.add_argument(
+        "-clingen_upload_location",
+        "--clingen_upload_location",
         help=(
             "Clingen location to upload data to (used to override config data)"
         ),

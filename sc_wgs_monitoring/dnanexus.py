@@ -1,4 +1,5 @@
 from typing import Dict
+import re
 
 import dxpy
 
@@ -20,11 +21,10 @@ def login_to_dnanexus(token: str):
     dxpy.set_security_context(dx_security_context)
 
 
-def move_inputs_in_new_folders(
+def upload_input_files(
     date: str, project: dxpy.DXProject, sample_files: Dict
 ) -> list:
-    """Move the files necessary to the WGS workbook job in a folder as the job
-    requires a DNAnexus folder as an input
+    """Upload the input files required for creating the WGS workbook
 
     Parameters
     ----------
@@ -41,20 +41,24 @@ def move_inputs_in_new_folders(
         List of folders where the inputs were moved to
     """
 
-    folders = {}
+    data = {}
 
     for sample, files in sample_files.items():
         folder = f"/{date}/{sample}"
+        data.setdefault(sample, {})
         dxpy.api.project_new_folder(
             project.id, input_params={"folder": folder, "parents": True}
         )
+        data[sample]["folder"] = folder
 
         for file in files:
-            file.move(folder)
+            dxfile = dxpy.upload_local_file(
+                file, project=project.id, folder=folder
+            )
 
-        folders[folder] = sample
+            data[sample].setdefault("files", []).append(dxfile)
 
-    return folders
+    return data
 
 
 def get_output_id(execution: Dict) -> str:
@@ -82,8 +86,40 @@ def get_output_id(execution: Dict) -> str:
             return job_output
 
 
-def start_wgs_workbook_job(workbook_inputs: Dict, app_id: str) -> dxpy.DXJob:
-    """Start the WHS Solid cancer workbook job
+def assign_dxfile_to_workbook_input(file: dxpy.DXFile, patterns: dict) -> dict:
+    """Assign DXFile to a workbook job input name
+
+    Parameters
+    ----------
+    file : dxpy.DXFile
+        DXFile object to assign to an input name
+    patterns : dict
+        Dict of the patterns with their associated input name
+
+    Returns
+    -------
+    dict
+        Dict containing the input name and the dnanexus link dict needed
+        for starting the job
+
+    Raises
+    ------
+    AssertionError
+        If the file name couldn't be associated with a pattern, raise error
+    """
+    for pattern, input_name in patterns.items():
+        if re.search(pattern, file.name):
+            return {input_name: {"$dnanexus_link": file.id}}
+
+    raise AssertionError(
+        "Couldn't match a dnanexus filename to an expected workbook input name"
+    )
+
+
+def start_wgs_workbook_job(
+    workbook_inputs: Dict, app_id: str, output_folder: str
+) -> dxpy.DXJob:
+    """Start the WGS Solid cancer workbook job
 
     Parameters
     ----------
@@ -100,5 +136,5 @@ def start_wgs_workbook_job(workbook_inputs: Dict, app_id: str) -> dxpy.DXJob:
 
     return dxpy.bindings.dxapp.DXApp(dxid=app_id).run(
         workbook_inputs,
-        folder=f"{workbook_inputs['nextflow_pipeline_params']}/output",
+        folder=output_folder,
     )
