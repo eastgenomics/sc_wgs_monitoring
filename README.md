@@ -27,7 +27,7 @@ CONFIG = {
     "user": "",
     "pwd": "",
     "db_name": "",
-    "project_to_check_for_new_files": "",
+    "project_id": "",
     "input_patterns": [
         r"[-_]reported_structural_variants\..*\.csv",
         r"[-_]reported_variants\..*\.csv",
@@ -43,7 +43,8 @@ CONFIG = {
         "clinvar": "",
         "clinvar_index": "",
     },
-    "clingen_location": "",
+    "clingen_input_location": "",
+    "clingen_upload_location": "",
 }
 
 ```
