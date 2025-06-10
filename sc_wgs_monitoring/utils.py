@@ -1,6 +1,7 @@
 import importlib.util
 from pathlib import Path
 from typing import Dict
+import os
 import re
 import sys
 
@@ -25,6 +26,49 @@ def load_config(config_file) -> Dict:
     sys.modules[config_path.name] = module
     spec.loader.exec_module(module)
     return module.CONFIG
+
+
+def load_env_variables() -> tuple:
+    """Load the environment variables required for connecting to DNAnexus, the
+    WGS database and to interact with Slack
+
+    Returns
+    -------
+    tuple
+        Tuple containing the variables from the environment
+
+    Raises
+    ------
+    KeyError
+        If a key doesn't exist, raise an error
+    """
+
+    try:
+        dx_token = os.environ.get("DNANEXUS_TOKEN")
+        slack_token = os.environ.get("SLACK_TOKEN")
+        slack_log_channel = os.environ.get("SLACK_LOG_CHANNEL")
+        slack_alert_channel = os.environ.get("SLACK_ALERT_CHANNEL")
+        sc_wgs_db = os.environ.get("DB_NAME")
+        postgres_user = os.environ.get("DB_USER")
+        postgres_pwd = os.environ.get("DB_PASSWORD")
+
+    except KeyError as e:
+        key = e.args[0]
+
+        raise KeyError(
+            f"Unable to import {key} from environment, is an .env file "
+            "present or env variables set?"
+        )
+
+    return (
+        dx_token,
+        slack_token,
+        slack_log_channel,
+        slack_alert_channel,
+        sc_wgs_db,
+        postgres_user,
+        postgres_pwd,
+    )
 
 
 def get_sample_id_from_files(files: list, patterns: list) -> Dict:
