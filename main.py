@@ -3,13 +3,23 @@ import datetime
 import multiprocessing
 from pathlib import Path
 import re
+import sys
 
 import dxpy
 
-from sc_wgs_monitoring import check, dnanexus, db, utils
+from sc_wgs_monitoring import check, dnanexus, db, notifications, utils
 
 
 def main(**args):
+    (
+        dx_token,
+        slack_token,
+        slack_log_channel,
+        slack_alert_channel,
+        sc_wgs_db,
+        postgres_user,
+        postgres_pwd,
+    ) = utils.load_env_variables()
     config_data = utils.load_config(args["config"])
 
     if args["time_to_check"]:
@@ -31,14 +41,14 @@ def main(**args):
 
     # Database setup things
     session, meta = db.connect_to_db(
-        config_data["user"],
-        config_data["pwd"],
-        config_data["db_name"],
+        postgres_user,
+        postgres_pwd,
+        sc_wgs_db,
     )
     sc_wgs_table = meta.tables["sc_wgs_data"]
 
     # DNAnexus setup things
-    dnanexus.login_to_dnanexus(args["dnanexus_token"])
+    dnanexus.login_to_dnanexus(dx_token)
     sd_wgs_project = dxpy.bindings.DXProject(config_data["project_id"])
     dxpy.set_workspace_id(sd_wgs_project.id)
     sc_wgs_workbook_app = dxpy.bindings.dxapp.DXApp(
@@ -46,6 +56,9 @@ def main(**args):
     )
 
     date = datetime.date.today().strftime("%y%m%d")
+    now = datetime.datetime.now().strftime("%y%m%d | %H:%M:%S")
+
+    header_msg = f"{now} - Command line: `{' '.join(sys.argv)}`\n\n"
 
     if not args["start_jobs"] and not args["check_jobs"]:
         raise AssertionError(
@@ -283,12 +296,19 @@ def main(**args):
 
             print("Successful db update")
 
+            job_failures = []
+
             for job in jobs:
                 try:
                     job.wait_on_done(10)
                 except dxpy.exceptions.DXJobFailureError:
-                    # TODO inform bioinformatics team
-                    pass
+                    job_failures.append(f"- Job {job.id} failed")
+
+            notifications.slack_notify(
+                f"{header_msg + '\n'.join(job_failures)}",
+                slack_log_channel,
+                slack_token,
+            )
 
             # check the job statuses, update the db and download the files in
             # the appropriate locations
@@ -320,7 +340,6 @@ def main(**args):
                     )
 
         else:
-            # TODO probably send a slack log message
             print("Couldn't find any files")
 
     # check jobs that have finished
@@ -395,7 +414,6 @@ def main(**args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("dnanexus_token")
     parser.add_argument(
         "-config",
         "--config",
