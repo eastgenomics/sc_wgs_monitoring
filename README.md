@@ -4,29 +4,42 @@ Solid cancer WGS repository to monitor new files and new outputs from WGS workbo
 
 ## How to run
 
-```sh
-python main.py ${dnanexus_token} ${time_to_check_after} ${option} [-c config_override ...]
-```
-
 The necessary inputs are:
 
-- DNAnexus token as the repository relies on DNAnexus
-- The time to check for new files or jobs i.e. <http://autodoc.dnanexus.com/bindings/python/current/dxpy_search.html#dxpy.bindings.search.find_data_objects>
 - The option for checking:
   - `-s` for checking new files, starting jobs and outputting the csv for the Confluence database
-  - `-c` for checking completed jobs
+    - `-t` for looking for files MODIFIED in the specified timeframe i.e. `1d` will check for files modified one day earlier at most. `s`, `m`, `h` can also be used for seconds, minutes and hours respectively
+    - `-ids` can be used to specify dnanexus file ids. This will start jobs from those files.
+    - `-l` can be used to specify local files, starting the process from the specified files.
+  - `-c` for checking completed jobs and uploading the output of those jobs.
+    - `-t` will look for jobs completed in the specified timeframe
+    - `-ids` can be used to specify job ids to check.
 
 ```sh
-docker exec ${container_id} sh -c 'python3 /app/sc_wgs_monitoring/main.py "$DNANEXUS_TOKEN" ...'
+# basic command
+docker exec ${container_id} sh -c 'python3 /app/sc_wgs_monitoring/main.py ...'
+
+# check for new files modified in the last 5 minutes
+docker exec ${container_id} sh -c 'python3 /app/sc_wgs_monitoring/main.py -s -t 5m'
+# start workbook jobs from dnanexus files
+docker exec ${container_id} sh -c 'python3 /app/sc_wgs_monitoring/main.py -s -ids ${file_id} ${file_id} ${file_id}'
+# start workbook jobs from local files
+docker exec ${container_id} sh -c 'python3 /app/sc_wgs_monitoring/main.py -s -ids ${file} ${file} ${file}'
+
+# check for jobs finished in the last hour
+docker exec ${container_id} sh -c 'python3 /app/sc_wgs_monitoring/main.py -c -t 5m'
+# upload files from the specified jobs
+docker exec ${container_id} sh -c 'python3 /app/sc_wgs_monitoring/main.py -c -ids ${job_id}'
 ```
 
 ## Config
 
+The monitoring app uses a Python config file to allow customisation inputs, input and upload locations, app id...
+
+The repo has a default config file: `/app/sc_wgs_monitoring/config.py`. Default values can be overriden by using `-config` or using `config_override --key_name` with key name being the key in the config file described below:
+
 ```python
 CONFIG = {
-    "user": "",
-    "pwd": "",
-    "db_name": "",
     "project_id": "",
     "input_patterns": [
         r"[-_]reported_structural_variants\..*\.csv",
@@ -46,5 +59,4 @@ CONFIG = {
     "clingen_input_location": "",
     "clingen_upload_location": "",
 }
-
 ```
