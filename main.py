@@ -293,8 +293,9 @@ def main(**args):
             # check the job statuses, update the db and download the files in
             # the appropriate locations
             for sample, data in dnanexus_data.items():
+                job = data["job"]
                 # get job status
-                job_status = data["job"].state
+                job_status = job.state
 
                 db.update_in_db(
                     session, sc_wgs_table, sample, {"job_status": job_status}
