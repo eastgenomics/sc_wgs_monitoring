@@ -121,8 +121,10 @@ def start_wgs_workbook_job(
     ----------
     workbook_inputs : Dict
         Dict containing the inputs for the sample
-    app_id : str
+    app : dxpy.DXApp
         DNAnexus app to use for running the job
+    job_name : str
+        String with the job name to give to the job
     output_folder : str
         Output folder in DNAnexus for the job
 
