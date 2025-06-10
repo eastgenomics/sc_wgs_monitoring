@@ -455,6 +455,14 @@ if __name__ == "__main__":
         help="Project ID in which to upload and process the workbooks",
     )
     config_override.add_argument(
+        "-pid_div_id",
+        "--pid_div_id",
+        help=(
+            "The ID of the div element that contains the PID information in "
+            "the supplementary HTML"
+        ),
+    )
+    config_override.add_argument(
         "-app_id",
         "--sd_wgs_workbook_app_id",
         help="SD WGS workbook app ID",
