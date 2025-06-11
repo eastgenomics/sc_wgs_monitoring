@@ -24,10 +24,10 @@ docker exec ${container_id} sh -c 'python3 /app/sc_wgs_monitoring/main.py -s -t 
 # start workbook jobs from dnanexus files
 docker exec ${container_id} sh -c 'python3 /app/sc_wgs_monitoring/main.py -s -ids ${file_id} ${file_id} ${file_id}'
 # start workbook jobs from local files
-docker exec ${container_id} sh -c 'python3 /app/sc_wgs_monitoring/main.py -s -ids ${file} ${file} ${file}'
+docker exec ${container_id} sh -c 'python3 /app/sc_wgs_monitoring/main.py -s -l ${file} ${file} ${file}'
 
 # check for jobs finished in the last hour
-docker exec ${container_id} sh -c 'python3 /app/sc_wgs_monitoring/main.py -c -t 5m'
+docker exec ${container_id} sh -c 'python3 /app/sc_wgs_monitoring/main.py -c -t 1h'
 # upload files from the specified jobs
 docker exec ${container_id} sh -c 'python3 /app/sc_wgs_monitoring/main.py -c -ids ${job_id}'
 ```
