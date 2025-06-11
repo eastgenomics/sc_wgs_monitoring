@@ -1,6 +1,6 @@
 from typing import Tuple, List
 
-from sqlalchemy import create_engine, select, insert
+from sqlalchemy import create_engine, select, insert, update
 from sqlalchemy.schema import Table
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.sql.schema import MetaData
@@ -84,4 +84,30 @@ def insert_in_db(session: Session, table: Table, data: List):
 
     insert_obj = insert(table).values(data)
     session.execute(insert_obj)
+    session.commit()
+
+
+def update_in_db(
+    session: Session, table: Table, referral_id: str, update_data: dict
+):
+    """Update the database where the referral id is equal to the one given
+    with the given update data
+
+    Parameters
+    ----------
+    session : Session
+        Session SQLAlchemy object
+    table : Table
+        Table SQLAlchemy object
+    referral_id : str
+        Referral id to get the appropriate row
+    update_data : dict
+        Dict containing the data used for updating the row
+    """
+    update_obj = (
+        update(table)
+        .where(table.c.referral_id == referral_id)
+        .values(**update_data)
+    )
+    session.execute(update_obj)
     session.commit()

@@ -23,7 +23,7 @@ def login_to_dnanexus(token: str):
 
 def upload_input_files(
     date: str, project: dxpy.DXProject, sample_files: Dict
-) -> list:
+) -> dict:
     """Upload the input files required for creating the WGS workbook
 
     Parameters
@@ -37,8 +37,8 @@ def upload_input_files(
 
     Returns
     -------
-    list
-        List of folders where the inputs were moved to
+    dict
+        Dict of samples and their files in dnanexus and their location
     """
 
     data = {}
@@ -75,15 +75,8 @@ def get_output_id(execution: Dict) -> str:
         File id of the WGS workbook job output
     """
 
-    if execution["describe"]["state"] == "done":
-        job_output = [
-            output_id
-            for output_id in execution["output"]["published_files"].values()
-        ]
-
-        # sense check we have one output only
-        if len(job_output) == 1:
-            return job_output
+    job_output = execution["output"]["workbook"]["$dnanexus_link"]
+    return job_output
 
 
 def assign_dxfile_to_workbook_input(file: dxpy.DXFile, patterns: dict) -> dict:
@@ -117,7 +110,10 @@ def assign_dxfile_to_workbook_input(file: dxpy.DXFile, patterns: dict) -> dict:
 
 
 def start_wgs_workbook_job(
-    workbook_inputs: Dict, app_id: str, output_folder: str
+    workbook_inputs: Dict,
+    app: dxpy.DXApp,
+    job_name: str,
+    output_folder: str,
 ) -> dxpy.DXJob:
     """Start the WGS Solid cancer workbook job
 
@@ -125,8 +121,12 @@ def start_wgs_workbook_job(
     ----------
     workbook_inputs : Dict
         Dict containing the inputs for the sample
-    app_id : str
+    app : dxpy.DXApp
         DNAnexus app to use for running the job
+    job_name : str
+        String with the job name to give to the job
+    output_folder : str
+        Output folder in DNAnexus for the job
 
     Returns
     -------
@@ -134,7 +134,4 @@ def start_wgs_workbook_job(
         DXJob object
     """
 
-    return dxpy.bindings.dxapp.DXApp(dxid=app_id).run(
-        workbook_inputs,
-        folder=output_folder,
-    )
+    return app.run(workbook_inputs, name=job_name, folder=output_folder)
