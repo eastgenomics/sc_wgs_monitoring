@@ -12,3 +12,11 @@ RUN \
     xargs rm -rf {} && \
     rm -rf /root/.cache/pip && \
     apk --purge del gcc musl-dev linux-headers
+
+# Save the environment variables given using docker-compose for use in the cron job
+RUN \
+    printenv | grep -v "no_proxy" >> /etc/environment \
+    cron -f & \
+    # now we bring the primary process back into the foreground
+    # and leave it there
+    fg %1
