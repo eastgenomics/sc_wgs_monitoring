@@ -304,11 +304,12 @@ def main(**args):
                 except dxpy.exceptions.DXJobFailureError:
                     job_failures.append(f"- Job {job.id} failed")
 
-            notifications.slack_notify(
-                f"{header_msg + '\n'.join(job_failures)}",
-                slack_log_channel,
-                slack_token,
-            )
+            if job_failures:
+                notifications.slack_notify(
+                    f"{header_msg + '\n'.join(job_failures)}",
+                    slack_alert_channel,
+                    slack_token,
+                )
 
             # check the job statuses, update the db and download the files in
             # the appropriate locations
@@ -325,7 +326,8 @@ def main(**args):
                     output_id = dnanexus.get_output_id(job.describe())
                     dxpy.bindings.dxfile_functions.download_dxfile(
                         output_id,
-                        f"{config_data['clingen_upload_location']}/{sample}.xlsx",
+                        f"{config_data['clingen_upload_location']}/"
+                        f"{sample}.xlsx",
                     )
 
                     db.update_in_db(
@@ -344,72 +346,90 @@ def main(**args):
 
     # check jobs that have finished
     if args["check_jobs"]:
-        if args["dnanexus_ids"]:
-            executions = [
-                dxpy.DXJob(dxid=job_id).describe()
-                for job_id in args["dnanexus_ids"]
-            ]
+        if args["daily_report"]:
+            now = datetime.strptime(now, "%y%m%d | %H:%M:%S")
+            jobs_for_day = db.get_samples_for_the_day(
+                now - datetime.timedelta(days=1)
+            )
+            report = notifications.build_report(
+                jobs_for_day,
+                (now - datetime.timedelta(days=1)).strftime(
+                    "%y%m%d | %H:%M:%S"
+                ),
+            )
+            notifications.slack_notify(report, slack_log_channel, slack_token)
+
         else:
-            executions = dxpy.bindings.find_executions(
-                executable=config_data["sd_wgs_workbook_app_id"],
-                project=sd_wgs_project,
-                created_after=f"-{args['time_to_check']}",
-            )
-
-        for execution in executions:
-            sample_data = {}
-            job = dxpy.DXJob(execution["id"])
-            supplementary_html_file = dxpy.DXFile(
-                execution["runInput"]["supplementary_html"]["$dnanexus_link"]
-            )
-            sample_id = supplementary_html_file.name.split(".")[0]
-
-            # get job status
-            job_status = job.state
-
-            is_in_db = db.look_for_processed_samples(
-                session, sc_wgs_table, sample_id
-            )
-
-            if is_in_db is None:
-                # populate the dict
-                sample_data["referral_id"] = sample_id
-                sample_data["specimen_id"] = ""
-                sample_data["date"] = date
-                sample_data["clinical_indication"] = ""
-                sample_data["job_id"] = job.id
-                sample_data["job_status"] = job.state
-                sample_data["processing_status"] = "Job completed"
-                sample_data["workbook_dnanexus_location"] = (
-                    f"{config_data['project_id']}:{supplementary_html_file.folder}/output"
-                )
-                db.insert_in_db(session, sc_wgs_table, [sample_data])
-
+            if args["dnanexus_ids"]:
+                executions = [
+                    dxpy.DXJob(dxid=job_id).describe()
+                    for job_id in args["dnanexus_ids"]
+                ]
             else:
-                db.update_in_db(
-                    session,
-                    sc_wgs_table,
-                    sample_id,
-                    {"job_status": job_status},
+                executions = dxpy.bindings.find_executions(
+                    executable=config_data["sd_wgs_workbook_app_id"],
+                    project=sd_wgs_project,
+                    created_after=f"-{args['time_to_check']}",
                 )
 
-            if job_status == "done":
-                output_id = dnanexus.get_output_id(job.describe())
-                dxpy.bindings.dxfile_functions.download_dxfile(
-                    output_id,
-                    f"{config_data['clingen_upload_location']}/{sample_id}.xlsx",
+            for execution in executions:
+                sample_data = {}
+                job = dxpy.DXJob(execution["id"])
+                supplementary_html_file = dxpy.DXFile(
+                    execution["runInput"]["supplementary_html"][
+                        "$dnanexus_link"
+                    ]
+                )
+                sample_id = supplementary_html_file.name.split(".")[0]
+
+                # get job status
+                job_status = job.state
+
+                is_in_db = db.look_for_processed_samples(
+                    session, sc_wgs_table, sample_id
                 )
 
-                db.update_in_db(
-                    session,
-                    sc_wgs_table,
-                    sample_id,
-                    {
-                        "workbook_clingen_location": config_data[
-                            "clingen_upload_location"
-                        ]
-                    },
-                )
+                if is_in_db is None:
+                    # populate the dict
+                    sample_data["referral_id"] = sample_id
+                    sample_data["specimen_id"] = ""
+                    sample_data["date"] = date
+                    sample_data["clinical_indication"] = ""
+                    sample_data["job_id"] = job.id
+                    sample_data["job_status"] = job.state
+                    sample_data["processing_status"] = "Job completed"
+                    sample_data["workbook_dnanexus_location"] = (
+                        f"{config_data['project_id']}:"
+                        f"{supplementary_html_file.folder}/output"
+                    )
+                    db.insert_in_db(session, sc_wgs_table, [sample_data])
+
+                else:
+                    db.update_in_db(
+                        session,
+                        sc_wgs_table,
+                        sample_id,
+                        {"job_status": job_status},
+                    )
+
+                if job_status == "done":
+                    output_id = dnanexus.get_output_id(job.describe())
+                    dxpy.bindings.dxfile_functions.download_dxfile(
+                        output_id,
+                        f"{config_data['clingen_upload_location']}/"
+                        f"{sample_id}.xlsx",
+                    )
+
+                    db.update_in_db(
+                        session,
+                        sc_wgs_table,
+                        sample_id,
+                        {
+                            "workbook_clingen_location": config_data[
+                                "clingen_upload_location"
+                            ]
+                        },
+                    )
 
 
 if __name__ == "__main__":
@@ -444,6 +464,16 @@ if __name__ == "__main__":
             "Time period in which to check for presence of new files. Please "
             "use s, m, h, d as suffixes i.e. 10s will check for files "
             "MODIFIED in the last 10s"
+        ),
+    )
+    parser.add_argument(
+        "-d",
+        "--daily_report",
+        action="store_true",
+        default=False,
+        help=(
+            "Flag option to send a Slack report for the day for solid cancer "
+            "wgs workbook creation"
         ),
     )
 
