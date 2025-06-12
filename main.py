@@ -110,28 +110,9 @@ def main(**args):
 
             # handle file detection
             else:
-                files = utils.find_files_in_clingen_input_location(
+                new_files = utils.find_files_in_clingen_input_location(
                     config_data["clingen_input_location"]
                 )
-
-                time_to_check = utils.convert_time_to_epoch(
-                    args["time_to_check"]
-                )
-
-                new_files = [
-                    file
-                    for file in files
-                    if check.filter_file_using_time_to_check(
-                        file, time_to_check
-                    )
-                ]
-
-                if not new_files:
-                    print(
-                        "No new files modified in the last "
-                        f"{args['time_to_check']}. Exiting"
-                    )
-                    exit()
 
             # find the html file and remove the pid div from it
             supplementary_html = [
