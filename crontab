@@ -1,1 +1,0 @@
-*/15 * * * * /usr/local/bin/python /app/sc_wgs_monitoring/main.py -s -t 1h >> /var/log/cron.log 2>&1 && ./grafana.sh
