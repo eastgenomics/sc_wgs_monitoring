@@ -37,3 +37,32 @@ def slack_notify(message, channel, slack_token) -> None:
         logger.error(
             f"Error in sending post request for slack notification: {err}"
         )
+
+
+def build_report(jobs_dict: dict, date: str) -> str:
+    """Build the report message for the daily check
+
+    Parameters
+    ----------
+    jobs_dict : dict
+        Dict containing the job status and the data for the captured jobs
+    date : str
+        Date for the check
+
+    Returns
+    -------
+    str
+        String representing the report message to send to Slack
+    """
+
+    status_dict = {"done": ":white-check-mark:", "failed": ":warning:"}
+
+    report = f"Solid Cancer WGS workbooks | Jobs for {date}:\n"
+
+    for job_status, job_data in jobs_dict.items():
+        report += f"- {status_dict[job_status]} {job_status}:\n"
+
+        for job in job_data:
+            report += f"    - {job.referral_id} | {job.job_id}\n"
+
+    return report
