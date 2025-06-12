@@ -1,3 +1,4 @@
+import datetime
 from typing import Tuple, List
 
 from sqlalchemy import create_engine, select, insert, update
@@ -111,3 +112,38 @@ def update_in_db(
     )
     session.execute(update_obj)
     session.commit()
+
+
+def get_samples_for_the_day(
+    session: Session, table: Table, datetime_object: datetime.Datetime
+) -> dict:
+    """Get the samples that ran for the day
+
+    Parameters
+    ----------
+    session : SQLAlchemy session object
+        Session object for the connected database
+    table : SQLAlchemy Table object
+        Table object which contains the data of interest
+    datetime_object : datetime.Datetime
+        Datetime object which will be used to compare to the dates stored in
+        the database
+
+    Returns
+    -------
+    dict
+        Dict containing the result of the query based on the job status of each
+        row of result
+    """
+
+    res = session.execute(
+        select(table).filter(table.c.date >= datetime_object)
+    )
+
+    data = {}
+
+    if res.count() != 0:
+        for row in res:
+            data.setdefault(row.job_status, []).append(row)
+
+    return data
