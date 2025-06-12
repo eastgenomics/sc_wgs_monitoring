@@ -113,7 +113,16 @@ def get_sample_id_from_files(files: list, patterns: list) -> Dict:
             if sample_id in file.name:
                 file_dict[sample_id].append(file)
 
-    assert all(file_dict)
+    # build a list for the assertion
+    assertion = [
+        (True, k, v) if len(v) == 3 else (False, k, v)
+        for k, v in file_dict.items()
+    ]
+
+    for assertion_test, sample_id, files in assertion:
+        assert (
+            assertion_test is True
+        ), f"{sample_id} doesn't have 3 files associated: {files}"
 
     return file_dict
 
