@@ -441,9 +441,9 @@ if __name__ == "__main__":
         required=False,
         default="",
         help=(
-            "Time period in which to check for presence of new files. Please "
-            "use s, m, h, d as suffixes i.e. 10s will check for files "
-            "MODIFIED in the last 10s"
+            "Time period in which to check for new jobs. Please "
+            "use s, m, h, d as suffixes i.e. 10s will check for jobs "
+            "finished in the last 10s"
         ),
     )
     parser.add_argument(
