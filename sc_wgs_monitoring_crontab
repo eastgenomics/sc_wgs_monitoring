@@ -1,2 +1,2 @@
-*/15 * * * * /usr/local/bin/python /app/sc_wgs_monitoring/main.py -s -t 17m >> /var/log/cron.log 2>&1 && ./grafana.sh
+*/15 * * * * /usr/local/bin/python /app/sc_wgs_monitoring/main.py -s >> /var/log/cron.log 2>&1 && ./grafana.sh
 0 0 * * * /usr/local/bin/python /app/sc_wgs_monitoring/main.py -c -d >> /var/log/cron.log 2>&1 && ./grafana.sh
