@@ -331,6 +331,7 @@ def main(**args):
             now = datetime.strptime(now, "%y%m%d | %H:%M:%S")
             jobs_for_day = db.get_samples_for_the_day(
                 now - datetime.timedelta(days=1)
+<<<<<<< HEAD
             )
             report = notifications.build_report(
                 jobs_for_day,
@@ -338,6 +339,15 @@ def main(**args):
                     "%y%m%d | %H:%M:%S"
                 ),
             )
+=======
+            )
+            report = notifications.build_report(
+                jobs_for_day,
+                (now - datetime.timedelta(days=1)).strftime(
+                    "%y%m%d | %H:%M:%S"
+                ),
+            )
+>>>>>>> 1509df829e3abe669f59fa1bf6414f83774e617f
             notifications.slack_notify(report, slack_log_channel, slack_token)
 
         else:
