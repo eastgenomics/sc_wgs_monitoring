@@ -59,10 +59,13 @@ def build_report(jobs_dict: dict, date: str) -> str:
 
     report = f"Solid Cancer WGS workbooks | Jobs for {date}:\n"
 
-    for job_status, job_data in jobs_dict.items():
-        report += f"- {status_dict[job_status]} {job_status}:\n"
+    if jobs_dict:
+        for job_status, job_data in jobs_dict.items():
+            report += f"- {status_dict[job_status]} {job_status}:\n"
 
-        for job in job_data:
-            report += f"    - {job.referral_id} | {job.job_id}\n"
+            for job in job_data:
+                report += f"    - {job.referral_id} | {job.job_id}\n"
+    else:
+        report += "\nNo jobs detected."
 
     return report
