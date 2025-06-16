@@ -55,16 +55,16 @@ def build_report(jobs_dict: dict, date: str) -> str:
         String representing the report message to send to Slack
     """
 
-    status_dict = {"done": ":white-check-mark:", "failed": ":warning:"}
+    status_dict = {"done": ":white_check_mark:", "failed": ":warning:"}
 
-    report = f"Solid Cancer WGS workbooks | Jobs for {date}:\n"
+    report = f":excel: Solid Cancer WGS workbooks | Jobs for {date}:\n"
 
     if jobs_dict:
         for job_status, job_data in jobs_dict.items():
             report += f"- {status_dict[job_status]} {job_status}:\n"
 
             for job in job_data:
-                report += f"    - {job.referral_id} | {job.job_id}\n"
+                report += f"    - {job["referral_id"]} | `{job["job_id"]}`\n"
     else:
         report += "\nNo jobs detected."
 
