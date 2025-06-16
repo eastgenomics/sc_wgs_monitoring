@@ -115,7 +115,7 @@ def update_in_db(
 
 
 def get_samples_for_the_day(
-    session: Session, table: Table, datetime_object: datetime.Datetime
+    session: Session, table: Table, datetime_object: datetime.datetime
 ) -> dict:
     """Get the samples that ran for the day
 
@@ -125,7 +125,7 @@ def get_samples_for_the_day(
         Session object for the connected database
     table : SQLAlchemy Table object
         Table object which contains the data of interest
-    datetime_object : datetime.Datetime
+    datetime_object : datetime.datetime
         Datetime object which will be used to compare to the dates stored in
         the database
 
@@ -142,8 +142,14 @@ def get_samples_for_the_day(
 
     data = {}
 
-    if res.count() != 0:
-        for row in res:
-            data.setdefault(row.job_status, []).append(row)
+    if res.rowcount != 0:
+        for row in res.mappings().all():
+            # for some reason the values have a bunch of whitespace added
+            row_data = {
+                k.strip(): v.strip() if type(v) is str else v
+                for k, v in row.items()
+            }
+
+            data.setdefault(row_data["job_status"], []).append(row_data)
 
     return data
