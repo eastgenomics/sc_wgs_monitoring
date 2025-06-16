@@ -114,6 +114,22 @@ def main(**args):
                     config_data["clingen_input_location"]
                 )
 
+        if new_files:
+            # check if the files have expected suffixes
+            if not all(
+                check.check_file_input_name_is_correct(file.name, patterns)
+                for file in new_files
+            ):
+                raise AssertionError(
+                    "The set of provided files is not correct. Expected files "
+                    f"with the following patterns: {[
+                        r'[-_]reported_structural_variants\..*\.csv',
+                        r'[-_]reported_variants\..*\.csv',
+                        r'\..*\.supplementary\.html',
+                    ]}. "
+                    f"Got {" | ".join([file.name for file in new_files])}"
+                )
+
             # find the html file and remove the pid div from it
             supplementary_html = [
                 file
@@ -128,22 +144,6 @@ def main(**args):
             with open(supplementary_html, "w") as file:
                 file.write(str(new_html))
 
-        # check if the files have expected suffixes
-        if not all(
-            check.check_file_input_name_is_correct(file.name, patterns)
-            for file in new_files
-        ):
-            raise AssertionError(
-                "The set of provided files is not correct. Expected files "
-                f"with the following patterns: {[
-                    r'[-_]reported_structural_variants\..*\.csv',
-                    r'[-_]reported_variants\..*\.csv',
-                    r'\..*\.supplementary\.html',
-                ]}. "
-                f"Got {" | ".join([file.name for file in new_files])}"
-            )
-
-        if new_files:
             # group files per id as a sense check
             sample_files = utils.get_sample_id_from_files(new_files, patterns)
 
