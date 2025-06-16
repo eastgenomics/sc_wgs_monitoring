@@ -158,12 +158,17 @@ def main(**args):
 
             print(f"Detected the following files for processing:\n{message}")
 
+            processed_samples = []
+
             # query the database to find samples that have already been
             # processed
-            processed_samples = [
-                db.look_for_processed_samples(session, sc_wgs_table, sample_id)
-                for sample_id in sample_files
-            ]
+            for sample_id in sample_files:
+                processed_sample = db.look_for_processed_samples(
+                    session, sc_wgs_table, sample_id
+                )
+
+                if processed_sample:
+                    processed_samples.append(processed_sample)
 
             # previous function returns a list of result or None so checking if
             # we have at least one sample to import in the db
@@ -328,10 +333,9 @@ def main(**args):
     # check jobs that have finished
     if args["check_jobs"]:
         if args["daily_report"]:
-            now = datetime.strptime(now, "%y%m%d | %H:%M:%S")
+            now = datetime.datetime.strptime(now, "%y%m%d | %H:%M:%S")
             jobs_for_day = db.get_samples_for_the_day(
-                now - datetime.timedelta(days=1)
-<<<<<<< HEAD
+                session, sc_wgs_table, now - datetime.timedelta(days=1)
             )
             report = notifications.build_report(
                 jobs_for_day,
@@ -339,15 +343,6 @@ def main(**args):
                     "%y%m%d | %H:%M:%S"
                 ),
             )
-=======
-            )
-            report = notifications.build_report(
-                jobs_for_day,
-                (now - datetime.timedelta(days=1)).strftime(
-                    "%y%m%d | %H:%M:%S"
-                ),
-            )
->>>>>>> 1509df829e3abe669f59fa1bf6414f83774e617f
             notifications.slack_notify(report, slack_log_channel, slack_token)
 
         else:
@@ -429,7 +424,7 @@ if __name__ == "__main__":
         "-config",
         "--config",
         required=False,
-        default="/app/sc_wgs_monitoring/config.py",
+        default="/app/sc_wgs_monitoring/config/sc_wgs_monitoring/config.py",
     )
     parser.add_argument(
         "-l",
