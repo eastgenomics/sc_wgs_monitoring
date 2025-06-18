@@ -67,7 +67,6 @@ def main(**args):
 
     # start WGS workbook jobs
     if args["start_jobs"]:
-        db_data = []
         new_files = None
         patterns = {
             r"[-_]reported_structural_variants\..*\.csv": "reported_structural_variants",
@@ -130,19 +129,23 @@ def main(**args):
                     f"Got {" | ".join([file.name for file in new_files])}"
                 )
 
-            # find the html file and remove the pid div from it
-            supplementary_html = [
+            # get the supplementary files
+            supplementary_html_files = [
                 file
                 for file in new_files
                 if re.search(r".*\.supplementary\.html", file.name)
-            ][0]
+            ]
 
-            new_html = utils.remove_pid_div_from_supplementary_file(
-                supplementary_html, config_data["pid_div_id"]
-            )
+            # remove the pid div and write the new file
+            for file in supplementary_html_files:
+                new_html_content = (
+                    utils.remove_pid_div_from_supplementary_file(
+                        file,
+                        config_data["pid_div_id"],
+                    )
+                )
 
-            with open(supplementary_html, "w") as file:
-                file.write(str(new_html))
+                utils.write_file(file, new_html_content)
 
             # group files per id as a sense check
             sample_files = utils.get_sample_id_from_files(new_files, patterns)
@@ -158,53 +161,40 @@ def main(**args):
 
             print(f"Detected the following files for processing:\n{message}")
 
-            processed_samples = []
+            sample_files = db.remove_processed_samples(
+                session, sc_wgs_table, sample_files
+            )
 
-            # query the database to find samples that have already been
-            # processed
+            db_data = []
+
             for sample_id in sample_files:
-                processed_sample = db.look_for_processed_samples(
-                    session, sc_wgs_table, sample_id
+                # setup dict with the columns that need to be populated
+                sample_data = {
+                    column.name: None
+                    for column in sc_wgs_table.columns
+                    if column.name != "id"
+                }
+
+                # populate the dict
+                sample_data["referral_id"] = sample_id
+                sample_data["specimen_id"] = ""
+                sample_data["date"] = date
+                sample_data["clinical_indication"] = ""
+                sample_data["job_id"] = ""
+                sample_data["job_status"] = ""
+                sample_data["processing_status"] = (
+                    "Preprocessing before job start"
                 )
+                sample_data["workbook_dnanexus_location"] = ""
+                db_data.append(sample_data)
 
-                if processed_sample:
-                    processed_samples.append(processed_sample)
-
-            # previous function returns a list of result or None so checking if
-            # we have at least one sample to import in the db
-            if any(processed_samples):
-                # remove all processed samples from dict to be passed
-                for sample_id in processed_samples:
-                    print(f"{sample_id} has already been processed")
-                    del sample_files[sample_id]
-
-            # all samples were removed
-            if not sample_files:
-                print(
-                    "All files detected have already been processed. "
-                    "Exiting..."
-                )
-                exit()
+            db.insert_in_db(session, sc_wgs_table, db_data)
 
             # if dnanexus file ids were specified no need for upload
             if args["dnanexus_ids"]:
-                dnanexus_data = {}
-
-                # go through the dnanexus file ids and match them to the
-                # sample id
-                for sample_id, files in sample_files.items():
-                    dnanexus_data.setdefault(sample_id, {})
-
-                    for file in files:
-                        for given_file in new_files:
-                            if file.id == given_file.id:
-                                dnanexus_data[sample_id].setdefault(
-                                    "files", []
-                                ).append(file)
-
-                                dnanexus_data[sample_id][
-                                    "folder"
-                                ] = file.folder
+                dnanexus_data = dnanexus.organise_data_for_processing(
+                    sample_files
+                )
 
             else:
                 dnanexus_data = dnanexus.upload_input_files(
@@ -216,31 +206,14 @@ def main(**args):
 
             # organise data for preparation for starting the jobs
             for sample_id, data in dnanexus_data.items():
-                inputs = {}
-
-                for file in data["files"]:
-                    inputs.update(
-                        dnanexus.assign_dxfile_to_workbook_input(
-                            file, patterns
-                        )
-                    )
-
                 args_for_starting_jobs.append(
-                    (
-                        inputs
-                        | {
-                            ref_input_name: {
-                                "$dnanexus_link": config_data[
-                                    "workbook_inputs"
-                                ][ref_input_name]
-                            }
-                            for ref_input_name in config_data[
-                                "workbook_inputs"
-                            ]
-                        },
+                    dnanexus.prepare_inputs(
+                        sample_id,
+                        data["files"],
+                        data["folder"],
+                        patterns,
+                        config_data["workbook_inputs"],
                         sc_wgs_workbook_app,
-                        f"{sc_wgs_workbook_app.name} | {sample_id}",
-                        f"{data['folder']}/output",
                     )
                 )
 
