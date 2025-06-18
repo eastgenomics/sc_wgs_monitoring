@@ -196,3 +196,28 @@ def remove_processed_samples(
         exit()
     else:
         return files_without_processed_samples
+
+
+def prepare_data_for_import(table, **kwargs):
+    """Prepare data for import by generating empty inputs for fields not used
+    and adding given key value pairs for the rest
+
+    Parameters
+    ----------
+    table : Table
+        Table in which the data will be imported in
+
+    Returns
+    -------
+    dict
+        Dict containing given data and empty values for non used fields
+    """
+
+    sample_data = {
+        column.name: "" for column in table.columns if column.name != "id"
+    }
+
+    for key, value in kwargs:
+        sample_data[key] = value
+
+    return sample_data
