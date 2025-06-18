@@ -204,3 +204,18 @@ def convert_time_to_epoch(time: str) -> int:
         return time_without_unit * 3600
     elif unit == "d":
         return time_without_unit * 3600 * 24
+
+
+def write_file(file_name: str, file_content: str):
+    """Write a file to give location and given content
+
+    Parameters
+    ----------
+    file_name : str
+        File name + path
+    file_content : str
+        Already formatted file content
+    """
+
+    with open(file_name, "w") as f:
+        f.write(str(file_content))
