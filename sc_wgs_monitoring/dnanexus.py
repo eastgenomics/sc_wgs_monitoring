@@ -109,6 +109,82 @@ def assign_dxfile_to_workbook_input(file: dxpy.DXFile, patterns: dict) -> dict:
     )
 
 
+def organise_data_for_processing(sample_files: dict) -> dict:
+    """Organise data for processing before preparing the inputs
+
+    Parameters
+    ----------
+    sample_files : dict
+        Dict containing sample ids and files
+
+    Returns
+    -------
+    dict
+        Dict containing the sample, the files and their folder
+    """
+
+    dnanexus_data = {}
+
+    # go through the dnanexus file ids and match them to the
+    # sample id
+    for sample_id, files in sample_files.items():
+        dnanexus_data.setdefault(sample_id, {})
+
+        for file in files:
+            dnanexus_data[sample_id].setdefault("files", []).append(file)
+            dnanexus_data[sample_id]["folder"] = file.folder
+
+    return dnanexus_data
+
+
+def prepare_inputs(
+    sample: str,
+    files: list,
+    folder: str,
+    patterns: list,
+    workbook_inputs: dict,
+    workbook_app: dxpy.DXApp,
+) -> dict:
+    """Prepare the inputs for starting the jobs
+
+    Parameters
+    ----------
+    sample : str
+        Sample id
+    files : list
+        List of files for one job
+    folder : str
+        Folder output
+    patterns : list
+        List of patterns for assignment to the correct input name
+    workbook_inputs : dict
+        Dict containing reference files
+    workbook_app : dxpy.DXApp
+        DXApp to be use
+
+    Returns
+    -------
+    dict
+        Dict containing all the input names and their inputs
+    """
+
+    inputs = {}
+
+    for file in files:
+        inputs.update(assign_dxfile_to_workbook_input(file, patterns))
+
+    return (
+        inputs
+        | {
+            ref_input_name: {"$dnanexus_link": workbook_inputs[ref_input_name]}
+            for ref_input_name in workbook_inputs
+        },
+        workbook_app,
+        f"{workbook_app.name} | {sample}",
+        f"{folder}/output",
+    )
+
+
 def start_wgs_workbook_job(
     workbook_inputs: Dict,
     app: dxpy.DXApp,
