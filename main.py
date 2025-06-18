@@ -168,24 +168,14 @@ def main(**args):
             db_data = []
 
             for sample_id in sample_files:
-                # setup dict with the columns that need to be populated
-                sample_data = {
-                    column.name: None
-                    for column in sc_wgs_table.columns
-                    if column.name != "id"
-                }
-
-                # populate the dict
-                sample_data["referral_id"] = sample_id
-                sample_data["specimen_id"] = ""
-                sample_data["date"] = date
-                sample_data["clinical_indication"] = ""
-                sample_data["job_id"] = ""
-                sample_data["job_status"] = ""
-                sample_data["processing_status"] = (
-                    "Preprocessing before job start"
+                sample_data = db.prepare_data_for_import(
+                    sc_wgs_table,
+                    {
+                        "referral_id": sample_id,
+                        "date": date,
+                        "processing_status": "Preprocessing before job start",
+                    },
                 )
-                sample_data["workbook_dnanexus_location"] = ""
                 db_data.append(sample_data)
 
             db.insert_in_db(session, sc_wgs_table, db_data)
@@ -231,29 +221,16 @@ def main(**args):
                 if sample_id in dnanexus_data:
                     dnanexus_data[sample_id]["job"] = job
 
-                # setup dict with the columns that need to be populated
-                sample_data = {
-                    column.name: None
-                    for column in sc_wgs_table.columns
-                    if column.name != "id"
-                }
-
-                # populate the dict
-                sample_data["referral_id"] = sample_id
-                sample_data["specimen_id"] = ""
-                sample_data["date"] = date
-                sample_data["clinical_indication"] = ""
-                sample_data["job_id"] = job.id
-                sample_data["job_status"] = ""
-                sample_data["processing_status"] = "Job started"
-                sample_data["workbook_dnanexus_location"] = (
-                    f"{config_data['project_id']}:{data['folder']}/output"
+                db.update_in_db(
+                    session,
+                    sc_wgs_table,
+                    sample,
+                    {
+                        "job_id": job.id,
+                        "processing_status": "Job started",
+                        "workbook_dnanexus_location": f"{config_data['project_id']}:{data['folder']}/output",
+                    },
                 )
-                db_data.append(sample_data)
-
-            db.insert_in_db(session, sc_wgs_table, db_data)
-
-            print("Successful db update")
 
             job_failures = []
 
@@ -349,17 +326,17 @@ def main(**args):
                 )
 
                 if is_in_db is None:
-                    # populate the dict
-                    sample_data["referral_id"] = sample_id
-                    sample_data["specimen_id"] = ""
-                    sample_data["date"] = date
-                    sample_data["clinical_indication"] = ""
-                    sample_data["job_id"] = job.id
-                    sample_data["job_status"] = job.state
-                    sample_data["processing_status"] = "Job completed"
-                    sample_data["workbook_dnanexus_location"] = (
-                        f"{config_data['project_id']}:"
-                        f"{supplementary_html_file.folder}/output"
+                    db.prepare_data_for_import(
+                        sc_wgs_table,
+                        {
+                            "referral_id": sample_id,
+                            "date": date,
+                            "job_id": job.id,
+                            "job_status": job.state,
+                            "processing_status": "Job completed",
+                            "workbook_dnanexus_location": f"{config_data['project_id']}:"
+                            f"{supplementary_html_file.folder}/output",
+                        },
                     )
                     db.insert_in_db(session, sc_wgs_table, [sample_data])
 
