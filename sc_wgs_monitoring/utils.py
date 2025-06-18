@@ -44,13 +44,13 @@ def load_env_variables() -> tuple:
     """
 
     try:
-        dx_token = os.environ.get("DNANEXUS_TOKEN")
-        slack_token = os.environ.get("SLACK_TOKEN")
-        slack_log_channel = os.environ.get("SLACK_LOG_CHANNEL")
-        slack_alert_channel = os.environ.get("SLACK_ALERT_CHANNEL")
-        sc_wgs_db = os.environ.get("DB_NAME")
-        postgres_user = os.environ.get("DB_USER")
-        postgres_pwd = os.environ.get("DB_PASSWORD")
+        dx_token = os.environ["DNANEXUS_TOKEN"]
+        slack_token = os.environ["SLACK_TOKEN"]
+        slack_log_channel = os.environ["SLACK_LOG_CHANNEL"]
+        slack_alert_channel = os.environ["SLACK_ALERT_CHANNEL"]
+        sc_wgs_db = os.environ["DB_NAME"]
+        postgres_user = os.environ["DB_USER"]
+        postgres_pwd = os.environ["DB_PASSWORD"]
 
     except KeyError as e:
         key = e.args[0]
