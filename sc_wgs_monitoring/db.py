@@ -153,3 +153,46 @@ def get_samples_for_the_day(
             data.setdefault(row_data["job_status"], []).append(row_data)
 
     return data
+
+
+def remove_processed_samples(
+    session: Session, table: Table, files: dict
+) -> dict:
+    """Remove processed samples from detected sample dict
+
+    Parameters
+    ----------
+    session : Session
+        Session SQLAlchemy object
+    table : Table
+        Table SQLAlchemy object for the table to check for sample presence
+    files : dict
+        Dict containing the files and the sample id
+
+    Returns
+    -------
+    dict
+        Dict containing the same information but without samples that were
+        removed
+    """
+
+    files_without_processed_samples = {}
+
+    # query the database to find samples that have already been
+    # processed
+    for sample_id in files:
+        processed_sample = look_for_processed_samples(
+            session, table, sample_id
+        )
+
+        if processed_sample is None:
+            files_without_processed_samples[sample_id] = files[sample_id]
+        else:
+            print(f"Removed {sample_id} as it has already been processed")
+
+    # all samples were removed
+    if not files_without_processed_samples:
+        print("All files detected have already been processed. Exiting...")
+        exit()
+    else:
+        return files_without_processed_samples
