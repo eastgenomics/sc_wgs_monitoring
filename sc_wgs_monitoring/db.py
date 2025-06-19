@@ -183,15 +183,8 @@ def remove_processed_samples(
 
         if processed_sample is None:
             files_without_processed_samples[sample_id] = files[sample_id]
-        else:
-            print(f"Removed {sample_id} as it has already been processed")
 
-    # all samples were removed
-    if not files_without_processed_samples:
-        print("All files detected have already been processed. Exiting...")
-        sys.exit()
-    else:
-        return files_without_processed_samples
+    return files_without_processed_samples
 
 
 def prepare_data_for_import(table, **kwargs):
