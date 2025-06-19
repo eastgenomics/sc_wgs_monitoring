@@ -6,6 +6,11 @@ import re
 import sys
 
 from bs4 import BeautifulSoup
+import dxpy
+from sqlalchemy.schema import Table
+from sqlalchemy.orm import Session
+
+from sc_wgs_monitoring import db, dnanexus
 
 
 def load_config(config_file) -> Dict:
@@ -219,3 +224,41 @@ def write_file(file_name: str, file_content: str):
 
     with open(file_name, "w") as f:
         f.write(str(file_content))
+
+
+def download_file_and_update_db(
+    session: Session,
+    table: Table,
+    sample_id: str,
+    download_location: str,
+    job: dxpy.DXJob,
+):
+    """Given a job, download the dnanexus output file in given clingen
+    location. Update database with the download location.
+
+    Parameters
+    ----------
+    session : Session
+        SQLAlchemy Session object
+    table : Table
+        SQLAlchemy Table object
+    sample_id : str
+        Sample id
+    download_location : str
+        Path to where the output will be downloaded to
+    job : dxpy.DXJob
+        DXJob object for the workbook job for the given sample
+    """
+
+    output_id = dnanexus.get_output_id(job.describe())
+    dxpy.bindings.dxfile_functions.download_dxfile(
+        output_id,
+        f"{download_location}/" f"{sample_id}.xlsx",
+    )
+
+    db.update_in_db(
+        session,
+        table,
+        sample_id,
+        {"workbook_clingen_location": download_location},
+    )
