@@ -217,7 +217,7 @@ def prepare_data_for_import(table, **kwargs):
         column.name: "" for column in table.columns if column.name != "id"
     }
 
-    for key, value in kwargs:
+    for key, value in kwargs.items():
         sample_data[key] = value
 
     return sample_data
