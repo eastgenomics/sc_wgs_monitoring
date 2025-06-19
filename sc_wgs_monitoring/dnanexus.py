@@ -180,7 +180,7 @@ def prepare_inputs(
             for ref_input_name in workbook_inputs
         },
         workbook_app,
-        f"{workbook_app.name} | {sample}",
+        sample,
         f"{folder}/output",
     )
 
