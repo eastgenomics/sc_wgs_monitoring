@@ -90,8 +90,8 @@ def check_if_job_is_done(job_id: str) -> bool:
         if job.state not in ["runnable", "running", "idle"]:
             return True
         else:
-            # if it's been more than 10 minutes
-            if time.time() - start_time >= 600:
+            # if it's been more than 1h
+            if time.time() - start_time >= 3600:
                 return False
 
             time.sleep(15)
