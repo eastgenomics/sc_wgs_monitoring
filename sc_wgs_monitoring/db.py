@@ -144,13 +144,7 @@ def get_samples_for_the_day(
 
     if res.rowcount != 0:
         for row in res.mappings().all():
-            # for some reason the values have a bunch of whitespace added
-            row_data = {
-                k.strip(): v.strip() if type(v) is str else v
-                for k, v in row.items()
-            }
-
-            data.setdefault(row_data["job_status"], []).append(row_data)
+            data.setdefault(row["job_status"], []).append(row)
 
     return data
 
