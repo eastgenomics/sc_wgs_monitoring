@@ -105,6 +105,7 @@ def update_in_db(
     update_data : dict
         Dict containing the data used for updating the row
     """
+
     update_obj = (
         update(table)
         .where(table.c.referral_id == referral_id)
