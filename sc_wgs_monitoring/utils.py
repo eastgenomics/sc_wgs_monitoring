@@ -329,7 +329,7 @@ def start_parallel_workbook_jobs(
                 {
                     "job_id": job.id,
                     "processing_status": "Job started",
-                    "workbook_dnanexus_location": f"{job.project}:{job.folder}/output",
+                    "workbook_dnanexus_location": f"{job.project}:{job.folder}",
                 },
             )
 
@@ -363,29 +363,25 @@ def monitor_jobs(
     with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
         # Start the jobs and mark each future with the job objects
         future_to_completed_job = {
-            executor.submit(
-                check.check_if_job_is_done,
-                job_id,
-            ): job_id
+            executor.submit(check.check_if_job_is_done, job_id): job_id
             for job_id in jobs
         }
 
         for future in concurrent.futures.as_completed(future_to_completed_job):
             job = dxpy.DXJob(future_to_completed_job[future])
-
-            if future.result() is False:
-                job_failures.append(
-                    (f"- Job `{job.id}` has been running for more " "than 1h")
-                )
-
-            if job.state != "done":
-                job_failures.append(f"- Job `{job.id}` failed")
-
-            # check the job statuses, update the db and download the
-            # files in the appropriate locations
             sample_id = job.name
             job_status = job.state
 
+            if future.result() is False:
+                job_failures.append(
+                    f"- `{job.id}` has been running for more than 1h"
+                )
+
+            if job_status != "done":
+                job_failures.append(f"- `{job.id}` | {job_status}")
+
+            # check the job statuses, update the db and download the files in
+            # the appropriate locations
             db.update_in_db(
                 session,
                 table,
@@ -406,3 +402,5 @@ def monitor_jobs(
                     clingen_download_location,
                     job,
                 )
+
+    return job_failures
