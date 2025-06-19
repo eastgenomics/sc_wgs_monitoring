@@ -260,5 +260,8 @@ def download_file_and_update_db(
         session,
         table,
         sample_id,
-        {"workbook_clingen_location": download_location},
+        {
+            "workbook_clingen_location": download_location,
+            "processing_status": "Workbook downloaded",
+        },
     )
