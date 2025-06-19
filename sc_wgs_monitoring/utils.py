@@ -1,3 +1,4 @@
+import concurrent
 import importlib.util
 from pathlib import Path
 from typing import Dict
@@ -10,7 +11,7 @@ import dxpy
 from sqlalchemy.schema import Table
 from sqlalchemy.orm import Session
 
-from sc_wgs_monitoring import db, dnanexus
+from sc_wgs_monitoring import check, db, dnanexus
 
 
 def load_config(config_file) -> Dict:
@@ -265,3 +266,143 @@ def download_file_and_update_db(
             "processing_status": "Workbook downloaded",
         },
     )
+
+
+def start_parallel_workbook_jobs(
+    session: Session, table: Table, args_for_starting_jobs: list
+) -> list:
+    """Given a list of argument dict per job, start the jobs in parallel
+
+    Parameters
+    ----------
+    session : Session
+        SQLAlchemy Session object
+    table : Table
+        SQLAlchemy Table object
+    args_for_starting_jobs : list
+        List of dict containing the arguments for starting a job
+
+    Returns
+    -------
+    list
+        List of job objects created by DNAnexus
+    """
+
+    jobs = []
+
+    # start the jobs
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        # Start the jobs and mark each future with the job objects
+        future_to_job = {
+            executor.submit(
+                dnanexus.start_wgs_workbook_job,
+                inputs,
+                app,
+                job_name,
+                output_folder,
+            ): job_name
+            for (
+                inputs,
+                app,
+                job_name,
+                output_folder,
+            ) in args_for_starting_jobs
+        }
+
+        for future in concurrent.futures.as_completed(future_to_job):
+            sample_id = future_to_job[future]
+
+            try:
+                job = future.result()
+                jobs.append(job.id)
+
+            except Exception as exc:
+                print(
+                    "`%r` generated an exception: %s" % (sample_id, exc),
+                    flush=True,
+                )
+
+            db.update_in_db(
+                session,
+                table,
+                sample_id,
+                {
+                    "job_id": job.id,
+                    "processing_status": "Job started",
+                    "workbook_dnanexus_location": f"{job.project}:{job.folder}/output",
+                },
+            )
+
+    return jobs
+
+
+def monitor_jobs(
+    session: Session, table: Table, jobs: list, clingen_download_location: str
+) -> list:
+    """Monitor the running jobs and act accordingly when they finish.
+
+    Parameters
+    ----------
+    session : Session
+        SQLAlchemy Session object
+    table : Table
+        SQLAlchemy Table object
+    jobs : list
+        List of job objects to monitor
+    clingen_download_location : str
+        Download location for the output of the jobs
+
+    Returns
+    -------
+    list
+        List of jobs that failed
+    """
+
+    job_failures = []
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        # Start the jobs and mark each future with the job objects
+        future_to_completed_job = {
+            executor.submit(
+                check.check_if_job_is_done,
+                job_id,
+            ): job_id
+            for job_id in jobs
+        }
+
+        for future in concurrent.futures.as_completed(future_to_completed_job):
+            job = dxpy.DXJob(future_to_completed_job[future])
+
+            if future.result() is False:
+                job_failures.append(
+                    (f"- Job `{job.id}` has been running for more " "than 1h")
+                )
+
+            if job.state != "done":
+                job_failures.append(f"- Job `{job.id}` failed")
+
+            # check the job statuses, update the db and download the
+            # files in the appropriate locations
+            sample_id = job.name
+            job_status = job.state
+
+            db.update_in_db(
+                session,
+                table,
+                sample_id,
+                {
+                    "job_status": job_status,
+                    "processing_status": "Job finished",
+                },
+            )
+
+            # download the file to clingen and update db with the
+            # location
+            if job_status == "done":
+                download_file_and_update_db(
+                    session,
+                    table,
+                    sample_id,
+                    clingen_download_location,
+                    job,
+                )
