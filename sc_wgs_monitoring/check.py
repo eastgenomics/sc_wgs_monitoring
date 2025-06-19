@@ -1,5 +1,3 @@
-import datetime
-import os
 from pathlib import Path
 import re
 import time
@@ -89,11 +87,11 @@ def check_if_job_is_done(job_id: str) -> bool:
         # have to redefine the job object to update the job state
         job = dxpy.DXJob(job_id)
 
-        if job.state not in ["runnable", "running"]:
+        if job.state not in ["runnable", "running", "idle"]:
             return True
         else:
             # if it's been more than 10 minutes
             if time.time() - start_time >= 600:
                 return False
 
-            os.sleep(15)
+            time.sleep(15)
