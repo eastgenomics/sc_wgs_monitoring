@@ -220,9 +220,14 @@ def main(**args):
                 session, sc_wgs_table, args_for_starting_jobs
             )
 
-            print("Jobs started", flush=True)
+            print("Jobs started, starting job monitoring", flush=True)
 
-            job_failures = utils.monitor_jobs(jobs)
+            job_failures = utils.monitor_jobs(
+                session,
+                sc_wgs_table,
+                jobs,
+                config_data["clingen_download_location"],
+            )
 
             if job_failures:
                 notifications.slack_notify(
