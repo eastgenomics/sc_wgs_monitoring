@@ -59,7 +59,10 @@ def main(**args):
     date = datetime.date.today().strftime("%y%m%d")
     now = datetime.datetime.now().strftime("%y%m%d | %H:%M:%S")
 
-    header_msg = f"{now} - Command line: `{' '.join(sys.argv)}`\n\n"
+    header_msg = (
+        f"{now} - :excel: Solid Cancer Workbooks :excel: - Command line: "
+        f"`{' '.join(sys.argv)}`\n\n"
+    )
 
     if not args["start_jobs"] and not args["check_jobs"]:
         raise AssertionError(
@@ -160,7 +163,10 @@ def main(**args):
                 for file in files:
                     message += f"  - {file.name}\n"
 
-            print(f"Detected the following files for processing:\n{message}")
+            print(
+                f"Detected the following files for processing:\n{message}",
+                flush=True,
+            )
 
             sample_files = db.remove_processed_samples(
                 session, sc_wgs_table, sample_files
@@ -181,6 +187,8 @@ def main(**args):
 
             db.insert_in_db(session, sc_wgs_table, db_data)
 
+            print("Inserted data in db", flush=True)
+
             # if dnanexus file ids were specified no need for upload
             if args["dnanexus_ids"]:
                 dnanexus_data = dnanexus.organise_data_for_processing(
@@ -191,7 +199,7 @@ def main(**args):
                 dnanexus_data = dnanexus.upload_input_files(
                     date, sd_wgs_project, sample_files
                 )
-                print("Uploaded the files to DNAnexus")
+                print("Uploaded the files to DNAnexus", flush=True)
 
             args_for_starting_jobs = []
 
@@ -208,113 +216,23 @@ def main(**args):
                     )
                 )
 
-            jobs = []
+            jobs = utils.start_parallel_workbook_jobs(
+                session, sc_wgs_table, args_for_starting_jobs
+            )
 
-            # start the jobs
-            with concurrent.futures.ThreadPoolExecutor(
-                max_workers=10
-            ) as executor:
-                # Start the jobs and mark each future with the job objects
-                future_to_job = {
-                    executor.submit(
-                        dnanexus.start_wgs_workbook_job,
-                        inputs,
-                        app,
-                        job_name,
-                        output_folder,
-                    ): job_name
-                    for inputs, app, job_name, output_folder in args_for_starting_jobs
-                }
+            print("Jobs started", flush=True)
 
-                for future in concurrent.futures.as_completed(future_to_job):
-                    job_name = future_to_job[future]
-                    try:
-                        jobs.append(future.result())
-                    except Exception as exc:
-                        print(
-                            "%r generated an exception: %s" % (job_name, exc)
-                        )
+            job_failures = utils.monitor_jobs(jobs)
 
-            print("Jobs started")
-
-            # update the database with the job id, processing status and the
-            # workbook location in dnanexus
-            for job in jobs:
-                sample_id = job.name.split(" | ")[1]
-
-                if sample_id in dnanexus_data:
-                    dnanexus_data[sample_id]["job"] = job
-
-                db.update_in_db(
-                    session,
-                    sc_wgs_table,
-                    sample,
-                    {
-                        "job_id": job.id,
-                        "processing_status": "Job started",
-                        "workbook_dnanexus_location": f"{config_data['project_id']}:{data['folder']}/output",
-                    },
+            if job_failures:
+                notifications.slack_notify(
+                    f"{header_msg + '\n'.join(job_failures)}",
+                    slack_alert_channel,
+                    slack_token,
                 )
 
-            job_failures = []
-
-            with concurrent.futures.ThreadPoolExecutor(
-                max_workers=10
-            ) as executor:
-                # Start the jobs and mark each future with the job objects
-                future_to_completed_job = {
-                    executor.submit(
-                        check.check_if_job_is_done,
-                        job.id,
-                    ): job
-                    for job in jobs
-                }
-
-                for future in concurrent.futures.as_completed(
-                    future_to_completed_job
-                ):
-                    job = future_to_completed_job[future]
-
-                    if future.result() is False:
-                        job_failures.append(
-                            f"- Job {job.id} has been running for more than 10 minutes"
-                        )
-
-                    if job.state != "done":
-                        job_failures.append(f"- Job {job.id} failed")
-
-                    # check the job statuses, update the db and download the
-                    # files in the appropriate locations
-                    sample_id = job.name.split(" | ")[1]
-                    job_status = job.state
-
-                    db.update_in_db(
-                        session,
-                        sc_wgs_table,
-                        sample_id,
-                        {"job_status": job_status},
-                    )
-
-                    # download the file to clingen and update db with the
-                    # location
-                    if job_status == "done":
-                        utils.download_file_and_update_db(
-                            session,
-                            sc_wgs_table,
-                            sample_id,
-                            config_data["clingen_download_location"],
-                            job,
-                        )
-
-                if job_failures:
-                    notifications.slack_notify(
-                        f"{header_msg + '\n'.join(job_failures)}",
-                        slack_alert_channel,
-                        slack_token,
-                    )
-
         else:
-            print("Couldn't find any files")
+            print("Couldn't find any files", flush=True)
 
     # check jobs that have finished
     if args["check_jobs"]:
