@@ -166,13 +166,31 @@ def main(**args):
                 flush=True,
             )
 
-            sample_files = db.remove_processed_samples(
+            unprocessed_sample_files = db.remove_processed_samples(
                 session, sc_wgs_table, sample_files
             )
 
+            if unprocessed_sample_files == {}:
+                print(
+                    "All detected samples have already been processed",
+                    flush=True,
+                )
+                sys.exit()
+
+            processed_samples = set(sample_files.keys()) - set(
+                unprocessed_sample_files.keys()
+            )
+
+            if processed_samples:
+                print(
+                    "The following samples have already been processed:\n - "
+                    f"{"\n - ".join(processed_samples)}\n",
+                    flush=True,
+                )
+
             db_data = []
 
-            for sample_id in sample_files:
+            for sample_id in unprocessed_sample_files:
                 sample_data = db.prepare_data_for_import(
                     sc_wgs_table,
                     **{
@@ -190,12 +208,12 @@ def main(**args):
             # if dnanexus file ids were specified no need for upload
             if args["dnanexus_ids"]:
                 dnanexus_data = dnanexus.organise_data_for_processing(
-                    sample_files
+                    unprocessed_sample_files
                 )
 
             else:
                 dnanexus_data = dnanexus.upload_input_files(
-                    date, sd_wgs_project, sample_files
+                    date, sd_wgs_project, unprocessed_sample_files
                 )
                 print("Uploaded the files to DNAnexus", flush=True)
 
@@ -225,7 +243,14 @@ def main(**args):
                     slack_token,
                 )
 
-            print("Jobs started, starting job monitoring", flush=True)
+            if errors:
+                notifications.slack_notify(
+                    f"{header_msg + '\n'.join(errors)}",
+                    slack_alert_channel,
+                    slack_token,
+                )
+
+            print("Jobs started, starting job monitoring...", flush=True)
 
             job_failures = utils.monitor_jobs(
                 session,
