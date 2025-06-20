@@ -289,6 +289,7 @@ def start_parallel_workbook_jobs(
     """
 
     jobs = []
+    errors = []
 
     # start the jobs
     with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
@@ -317,10 +318,8 @@ def start_parallel_workbook_jobs(
                 jobs.append(job.id)
 
             except Exception as exc:
-                print(
-                    "`%r` generated an exception: %s" % (sample_id, exc),
-                    flush=True,
-                )
+                errors.append(f"{sample_id} generated an exception: {exc}")
+                continue
 
             db.update_in_db(
                 session,
@@ -333,7 +332,7 @@ def start_parallel_workbook_jobs(
                 },
             )
 
-    return jobs
+    return jobs, errors
 
 
 def monitor_jobs(
