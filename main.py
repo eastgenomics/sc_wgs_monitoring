@@ -1,12 +1,16 @@
 import argparse
 import datetime
+import logging
 from pathlib import Path
 import re
 import sys
 
 import dxpy
 
-from sc_wgs_monitoring import check, dnanexus, db, notifications, utils
+from sc_wgs_monitoring import check, dnanexus, db, logger, notifications, utils
+
+logger.set_up_logger()
+base_log = logging.getLogger("basic")
 
 
 def main(**args):
@@ -61,6 +65,8 @@ def main(**args):
         f"{now} - :excel: Solid Cancer Workbooks :excel: - Command line: "
         f"`{' '.join(sys.argv)}`\n\n"
     )
+
+    base_log.info(header_msg.replace("\n", "").replace(":excel:", ""))
 
     if not args["start_jobs"] and not args["check_jobs"]:
         raise AssertionError(
@@ -161,9 +167,8 @@ def main(**args):
                 for file in files:
                     message += f"  - {file.name}\n"
 
-            print(
-                f"Detected the following files for processing:\n{message}",
-                flush=True,
+            base_log.info(
+                f"Detected the following files for processing:\n{message}"
             )
 
             unprocessed_sample_files = db.remove_processed_samples(
@@ -171,9 +176,8 @@ def main(**args):
             )
 
             if unprocessed_sample_files == {}:
-                print(
+                base_log.warning(
                     "All detected samples have already been processed",
-                    flush=True,
                 )
                 sys.exit()
 
@@ -182,10 +186,9 @@ def main(**args):
             )
 
             if processed_samples:
-                print(
+                base_log.warning(
                     "The following samples have already been processed:\n - "
                     f"{"\n - ".join(processed_samples)}\n",
-                    flush=True,
                 )
 
             db_data = []
@@ -203,7 +206,7 @@ def main(**args):
 
             db.insert_in_db(session, sc_wgs_table, db_data)
 
-            print("Inserted data in db", flush=True)
+            base_log.info("Inserted data in db")
 
             # if dnanexus file ids were specified no need for upload
             if args["dnanexus_ids"]:
@@ -215,7 +218,7 @@ def main(**args):
                 dnanexus_data = dnanexus.upload_input_files(
                     date, sd_wgs_project, unprocessed_sample_files
                 )
-                print("Uploaded the files to DNAnexus", flush=True)
+                base_log.info("Uploaded the files to DNAnexus")
 
             args_for_starting_jobs = []
 
@@ -250,7 +253,7 @@ def main(**args):
                     slack_token,
                 )
 
-            print("Jobs started, starting job monitoring...", flush=True)
+            base_log.info("Jobs started, starting job monitoring...")
 
             job_failures = utils.monitor_jobs(
                 session,
@@ -267,7 +270,7 @@ def main(**args):
                 )
 
         else:
-            print("Couldn't find any files", flush=True)
+            base_log.info("Couldn't find any files")
 
     # check jobs that have finished
     if args["check_jobs"]:
@@ -283,6 +286,7 @@ def main(**args):
                 ),
             )
             notifications.slack_notify(report, slack_log_channel, slack_token)
+            base_log.info(report)
 
         else:
             if args["dnanexus_ids"]:
