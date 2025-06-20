@@ -216,9 +216,16 @@ def main(**args):
                     )
                 )
 
-            jobs = utils.start_parallel_workbook_jobs(
+            jobs, errors = utils.start_parallel_workbook_jobs(
                 session, sc_wgs_table, args_for_starting_jobs
             )
+
+            if errors:
+                notifications.slack_notify(
+                    f"{header_msg + '\n'.join(errors)}",
+                    slack_alert_channel,
+                    slack_token,
+                )
 
             print("Jobs started, starting job monitoring", flush=True)
 
