@@ -1,7 +1,5 @@
 import argparse
-import concurrent.futures
 import datetime
-import concurrent
 from pathlib import Path
 import re
 import sys
