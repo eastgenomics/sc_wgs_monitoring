@@ -57,6 +57,6 @@ CONFIG = {
         "clinvar_index": "",
     },
     "clingen_input_location": "",
-    "clingen_upload_location": "",
+    "clingen_download_location": "",
 }
 ```

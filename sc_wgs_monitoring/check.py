@@ -1,6 +1,8 @@
-import datetime
 from pathlib import Path
 import re
+import time
+
+import dxpy
 
 
 def check_dnanexus_id(string: str) -> bool:
@@ -65,26 +67,31 @@ def check_if_file_exists(path: str) -> bool:
     return True if Path(path).exists() else False
 
 
-def filter_file_using_time_to_check(file: Path, time_to_check: int):
-    """Check if the given file has been modified in the last x seconds
+def check_if_job_is_done(job_id: str) -> bool:
+    """Check if the job from a given job id has finished
 
     Parameters
     ----------
-    file : Path
-        File to check
-    time_to_check : int
-        Integer representing the number of seconds
+    job_id : str
+        Job id of the job to check
 
     Returns
     -------
     bool
-        Bool to represent if the file has been modified in the last x seconds
+        Boolean indicating the job status
     """
 
-    now = datetime.datetime.today().timestamp()
-    last_modified_time = file.stat().st_mtime
+    start_time = time.time()
 
-    if now - last_modified_time <= time_to_check:
-        return True
-    else:
-        return False
+    while True:
+        # have to redefine the job object to update the job state
+        job = dxpy.DXJob(job_id)
+
+        if job.state not in ["runnable", "running", "idle"]:
+            return True
+        else:
+            # if it's been more than 1h
+            if time.time() - start_time >= 3600:
+                return False
+
+            time.sleep(15)

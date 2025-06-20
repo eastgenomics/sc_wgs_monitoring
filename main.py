@@ -1,15 +1,24 @@
 import argparse
 import datetime
-import multiprocessing
 from pathlib import Path
 import re
+import sys
 
 import dxpy
 
-from sc_wgs_monitoring import check, dnanexus, db, utils
+from sc_wgs_monitoring import check, dnanexus, db, notifications, utils
 
 
 def main(**args):
+    (
+        dx_token,
+        slack_token,
+        slack_log_channel,
+        slack_alert_channel,
+        sc_wgs_db,
+        postgres_user,
+        postgres_pwd,
+    ) = utils.load_env_variables()
     config_data = utils.load_config(args["config"])
 
     if args["time_to_check"]:
@@ -31,14 +40,14 @@ def main(**args):
 
     # Database setup things
     session, meta = db.connect_to_db(
-        config_data["user"],
-        config_data["pwd"],
-        config_data["db_name"],
+        postgres_user,
+        postgres_pwd,
+        sc_wgs_db,
     )
     sc_wgs_table = meta.tables["sc_wgs_data"]
 
     # DNAnexus setup things
-    dnanexus.login_to_dnanexus(args["dnanexus_token"])
+    dnanexus.login_to_dnanexus(dx_token)
     sd_wgs_project = dxpy.bindings.DXProject(config_data["project_id"])
     dxpy.set_workspace_id(sd_wgs_project.id)
     sc_wgs_workbook_app = dxpy.bindings.dxapp.DXApp(
@@ -46,6 +55,12 @@ def main(**args):
     )
 
     date = datetime.date.today().strftime("%y%m%d")
+    now = datetime.datetime.now().strftime("%y%m%d | %H:%M:%S")
+
+    header_msg = (
+        f"{now} - :excel: Solid Cancer Workbooks :excel: - Command line: "
+        f"`{' '.join(sys.argv)}`\n\n"
+    )
 
     if not args["start_jobs"] and not args["check_jobs"]:
         raise AssertionError(
@@ -54,7 +69,6 @@ def main(**args):
 
     # start WGS workbook jobs
     if args["start_jobs"]:
-        db_data = []
         new_files = None
         patterns = {
             r"[-_]reported_structural_variants\..*\.csv": "reported_structural_variants",
@@ -97,59 +111,44 @@ def main(**args):
 
             # handle file detection
             else:
-                files = utils.find_files_in_clingen_input_location(
+                new_files = utils.find_files_in_clingen_input_location(
                     config_data["clingen_input_location"]
                 )
 
-                time_to_check = utils.convert_time_to_epoch(
-                    args["time_to_check"]
+        if new_files:
+            # check if the files have expected suffixes
+            if not all(
+                check.check_file_input_name_is_correct(file.name, patterns)
+                for file in new_files
+            ):
+                raise AssertionError(
+                    "The set of provided files is not correct. Expected files "
+                    f"with the following patterns: {[
+                        r'[-_]reported_structural_variants\..*\.csv',
+                        r'[-_]reported_variants\..*\.csv',
+                        r'\..*\.supplementary\.html',
+                    ]}. "
+                    f"Got {" | ".join([file.name for file in new_files])}"
                 )
 
-                new_files = [
-                    file
-                    for file in files
-                    if check.filter_file_using_time_to_check(
-                        file, time_to_check
-                    )
-                ]
-
-                if not new_files:
-                    print(
-                        "No new files modified in the last "
-                        f"{args['time_to_check']}. Exiting"
-                    )
-                    exit()
-
-            # find the html file and remove the pid div from it
-            supplementary_html = [
+            # get the supplementary files
+            supplementary_html_files = [
                 file
                 for file in new_files
                 if re.search(r".*\.supplementary\.html", file.name)
-            ][0]
+            ]
 
-            new_html = utils.remove_pid_div_from_supplementary_file(
-                supplementary_html, config_data["pid_div_id"]
-            )
+            # remove the pid div and write the new file
+            for file in supplementary_html_files:
+                new_html_content = (
+                    utils.remove_pid_div_from_supplementary_file(
+                        file,
+                        config_data["pid_div_id"],
+                    )
+                )
 
-            with open(supplementary_html, "w") as file:
-                file.write(str(new_html))
+                utils.write_file(file, new_html_content)
 
-        # check if the files have expected suffixes
-        if not all(
-            check.check_file_input_name_is_correct(file.name, patterns)
-            for file in new_files
-        ):
-            raise AssertionError(
-                "The set of provided files is not correct. Expected files "
-                f"with the following patterns: {[
-                    r'[-_]reported_structural_variants\..*\.csv',
-                    r'[-_]reported_variants\..*\.csv',
-                    r'\..*\.supplementary\.html',
-                ]}. "
-                f"Got {" | ".join([file.name for file in new_files])}"
-            )
-
-        if new_files:
             # group files per id as a sense check
             sample_files = utils.get_sample_id_from_files(new_files, patterns)
 
@@ -162,245 +161,173 @@ def main(**args):
                 for file in files:
                     message += f"  - {file.name}\n"
 
-            print(f"Detected the following files for processing:\n{message}")
+            print(
+                f"Detected the following files for processing:\n{message}",
+                flush=True,
+            )
 
-            # query the database to find samples that have already been
-            # processed
-            processed_samples = [
-                db.look_for_processed_samples(session, sc_wgs_table, sample_id)
-                for sample_id in sample_files
-            ]
+            sample_files = db.remove_processed_samples(
+                session, sc_wgs_table, sample_files
+            )
 
-            # previous function returns a list of result or None so checking if
-            # we have at least one sample to import in the db
-            if any(processed_samples):
-                # remove all processed samples from dict to be passed
-                for sample_id in processed_samples:
-                    print(f"{sample_id} has already been processed")
-                    del sample_files[sample_id]
+            db_data = []
 
-            # all samples were removed
-            if not sample_files:
-                print(
-                    "All files detected have already been processed. "
-                    "Exiting..."
-                )
-                exit()
-
-            # if dnanexus file ids were specified no need for upload
-            if args["dnanexus_ids"]:
-                dnanexus_data = {}
-
-                # go through the dnanexus file ids and match them to the
-                # sample id
-                for sample_id, files in sample_files.items():
-                    dnanexus_data.setdefault(sample_id, {})
-
-                    for file in files:
-                        for given_file in new_files:
-                            if file.id == given_file.id:
-                                dnanexus_data[sample_id].setdefault(
-                                    "files", []
-                                ).append(file)
-
-                                dnanexus_data[sample_id][
-                                    "folder"
-                                ] = file.folder
-
-            else:
-                dnanexus_data = dnanexus.upload_input_files(
-                    date, sd_wgs_project, sample_files
-                )
-                print("Uploaded the files to DNAnexus")
-
-            args_for_starting_jobs = []
-
-            # organise data for preparation for starting the jobs
-            for sample_id, data in dnanexus_data.items():
-                inputs = {}
-
-                for file in data["files"]:
-                    inputs.update(
-                        dnanexus.assign_dxfile_to_workbook_input(
-                            file, patterns
-                        )
-                    )
-
-                args_for_starting_jobs.append(
-                    (
-                        inputs
-                        | {
-                            ref_input_name: {
-                                "$dnanexus_link": config_data[
-                                    "workbook_inputs"
-                                ][ref_input_name]
-                            }
-                            for ref_input_name in config_data[
-                                "workbook_inputs"
-                            ]
-                        },
-                        sc_wgs_workbook_app,
-                        f"{sc_wgs_workbook_app.name} | {sample_id}",
-                        f"{data['folder']}/output",
-                    )
-                )
-
-            # start the jobs
-            with multiprocessing.Pool(processes=10) as pool:
-                jobs = pool.starmap(
-                    dnanexus.start_wgs_workbook_job, args_for_starting_jobs
-                )
-
-            print("Jobs started")
-
-            for job in jobs:
-                sample_id = job.name.split(" | ")[1]
-
-                if sample_id in dnanexus_data:
-                    dnanexus_data[sample_id]["job"] = job
-
-                # setup dict with the columns that need to be populated
-                sample_data = {
-                    column.name: None
-                    for column in sc_wgs_table.columns
-                    if column.name != "id"
-                }
-
-                # populate the dict
-                sample_data["referral_id"] = sample_id
-                sample_data["specimen_id"] = ""
-                sample_data["date"] = date
-                sample_data["clinical_indication"] = ""
-                sample_data["job_id"] = job.id
-                sample_data["job_status"] = ""
-                sample_data["processing_status"] = "Job started"
-                sample_data["workbook_dnanexus_location"] = (
-                    f"{config_data['project_id']}:{data['folder']}/output"
+            for sample_id in sample_files:
+                sample_data = db.prepare_data_for_import(
+                    sc_wgs_table,
+                    **{
+                        "referral_id": sample_id,
+                        "date": date,
+                        "processing_status": "Preprocessing before job start",
+                    },
                 )
                 db_data.append(sample_data)
 
             db.insert_in_db(session, sc_wgs_table, db_data)
 
-            print("Successful db update")
+            print("Inserted data in db", flush=True)
 
-            for job in jobs:
-                try:
-                    job.wait_on_done(10)
-                except dxpy.exceptions.DXJobFailureError:
-                    # TODO inform bioinformatics team
-                    pass
-
-            # check the job statuses, update the db and download the files in
-            # the appropriate locations
-            for sample, data in dnanexus_data.items():
-                job = data["job"]
-                # get job status
-                job_status = job.state
-
-                db.update_in_db(
-                    session, sc_wgs_table, sample, {"job_status": job_status}
+            # if dnanexus file ids were specified no need for upload
+            if args["dnanexus_ids"]:
+                dnanexus_data = dnanexus.organise_data_for_processing(
+                    sample_files
                 )
 
-                if job_status == "done":
-                    output_id = dnanexus.get_output_id(job.describe())
-                    dxpy.bindings.dxfile_functions.download_dxfile(
-                        output_id,
-                        f"{config_data['clingen_upload_location']}/{sample}.xlsx",
-                    )
+            else:
+                dnanexus_data = dnanexus.upload_input_files(
+                    date, sd_wgs_project, sample_files
+                )
+                print("Uploaded the files to DNAnexus", flush=True)
 
-                    db.update_in_db(
-                        session,
-                        sc_wgs_table,
-                        sample,
-                        {
-                            "workbook_clingen_location": config_data[
-                                "clingen_upload_location"
-                            ]
-                        },
+            args_for_starting_jobs = []
+
+            # organise data for preparation for starting the jobs
+            for sample_id, data in dnanexus_data.items():
+                args_for_starting_jobs.append(
+                    dnanexus.prepare_inputs(
+                        sample_id,
+                        data["files"],
+                        data["folder"],
+                        patterns,
+                        config_data["workbook_inputs"],
+                        sc_wgs_workbook_app,
                     )
+                )
+
+            jobs, errors = utils.start_parallel_workbook_jobs(
+                session, sc_wgs_table, args_for_starting_jobs
+            )
+
+            if errors:
+                notifications.slack_notify(
+                    f"{header_msg + '\n'.join(errors)}",
+                    slack_alert_channel,
+                    slack_token,
+                )
+
+            print("Jobs started, starting job monitoring", flush=True)
+
+            job_failures = utils.monitor_jobs(
+                session,
+                sc_wgs_table,
+                jobs,
+                config_data["clingen_download_location"],
+            )
+
+            if job_failures:
+                notifications.slack_notify(
+                    f"{header_msg + '\n'.join(job_failures)}",
+                    slack_alert_channel,
+                    slack_token,
+                )
 
         else:
-            # TODO probably send a slack log message
-            print("Couldn't find any files")
+            print("Couldn't find any files", flush=True)
 
     # check jobs that have finished
     if args["check_jobs"]:
-        if args["dnanexus_ids"]:
-            executions = [
-                dxpy.DXJob(dxid=job_id).describe()
-                for job_id in args["dnanexus_ids"]
-            ]
+        if args["daily_report"]:
+            now = datetime.datetime.strptime(now, "%y%m%d | %H:%M:%S")
+            jobs_for_day = db.get_samples_for_the_day(
+                session, sc_wgs_table, now - datetime.timedelta(days=1)
+            )
+            report = notifications.build_report(
+                jobs_for_day,
+                (now - datetime.timedelta(days=1)).strftime(
+                    "%y%m%d | %H:%M:%S"
+                ),
+            )
+            notifications.slack_notify(report, slack_log_channel, slack_token)
+
         else:
-            executions = dxpy.bindings.find_executions(
-                executable=config_data["sd_wgs_workbook_app_id"],
-                project=sd_wgs_project,
-                created_after=f"-{args['time_to_check']}",
-            )
-
-        for execution in executions:
-            sample_data = {}
-            job = dxpy.DXJob(execution["id"])
-            supplementary_html_file = dxpy.DXFile(
-                execution["runInput"]["supplementary_html"]["$dnanexus_link"]
-            )
-            sample_id = supplementary_html_file.name.split(".")[0]
-
-            # get job status
-            job_status = job.state
-
-            is_in_db = db.look_for_processed_samples(
-                session, sc_wgs_table, sample_id
-            )
-
-            if is_in_db is None:
-                # populate the dict
-                sample_data["referral_id"] = sample_id
-                sample_data["specimen_id"] = ""
-                sample_data["date"] = date
-                sample_data["clinical_indication"] = ""
-                sample_data["job_id"] = job.id
-                sample_data["job_status"] = job.state
-                sample_data["processing_status"] = "Job completed"
-                sample_data["workbook_dnanexus_location"] = (
-                    f"{config_data['project_id']}:{supplementary_html_file.folder}/output"
-                )
-                db.insert_in_db(session, sc_wgs_table, [sample_data])
-
+            if args["dnanexus_ids"]:
+                executions = [
+                    dxpy.DXJob(dxid=job_id).describe()
+                    for job_id in args["dnanexus_ids"]
+                ]
             else:
-                db.update_in_db(
-                    session,
-                    sc_wgs_table,
-                    sample_id,
-                    {"job_status": job_status},
+                executions = dxpy.bindings.find_executions(
+                    executable=config_data["sd_wgs_workbook_app_id"],
+                    project=sd_wgs_project,
+                    created_after=f"-{args['time_to_check']}",
                 )
 
-            if job_status == "done":
-                output_id = dnanexus.get_output_id(job.describe())
-                dxpy.bindings.dxfile_functions.download_dxfile(
-                    output_id,
-                    f"{config_data['clingen_upload_location']}/{sample_id}.xlsx",
+            for execution in executions:
+                job = dxpy.DXJob(execution["id"])
+                supplementary_html_file = dxpy.DXFile(
+                    execution["runInput"]["supplementary_html"][
+                        "$dnanexus_link"
+                    ]
+                )
+                sample_id = supplementary_html_file.name.split(".")[0]
+
+                # get job status
+                job_status = job.state
+
+                is_in_db = db.look_for_processed_samples(
+                    session, sc_wgs_table, sample_id
                 )
 
-                db.update_in_db(
-                    session,
-                    sc_wgs_table,
-                    sample_id,
-                    {
-                        "workbook_clingen_location": config_data[
-                            "clingen_upload_location"
-                        ]
-                    },
-                )
+                if is_in_db is None:
+                    sample_data = db.prepare_data_for_import(
+                        sc_wgs_table,
+                        **{
+                            "referral_id": sample_id,
+                            "date": date,
+                            "job_id": job.id,
+                            "job_status": job.state,
+                            "processing_status": "Job completed",
+                            "workbook_dnanexus_location": f"{config_data['project_id']}:"
+                            f"{supplementary_html_file.folder}/output",
+                        },
+                    )
+                    db.insert_in_db(session, sc_wgs_table, [sample_data])
+
+                else:
+                    db.update_in_db(
+                        session,
+                        sc_wgs_table,
+                        sample_id,
+                        {"job_status": job_status},
+                    )
+
+                if job_status == "done":
+                    utils.download_file_and_update_db(
+                        session,
+                        sc_wgs_table,
+                        sample_id,
+                        config_data["clingen_download_location"],
+                        job,
+                    )
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("dnanexus_token")
     parser.add_argument(
         "-config",
         "--config",
         required=False,
-        default="/app/sc_wgs_monitoring/config.py",
+        default="/app/sc_wgs_monitoring/config/sc_wgs_monitoring/config.py",
     )
     parser.add_argument(
         "-l",
@@ -423,9 +350,19 @@ if __name__ == "__main__":
         required=False,
         default="",
         help=(
-            "Time period in which to check for presence of new files. Please "
-            "use s, m, h, d as suffixes i.e. 10s will check for files "
-            "MODIFIED in the last 10s"
+            "Time period in which to check for new jobs. Please "
+            "use s, m, h, d as suffixes i.e. 10s will check for jobs "
+            "finished in the last 10s"
+        ),
+    )
+    parser.add_argument(
+        "-d",
+        "--daily_report",
+        action="store_true",
+        default=False,
+        help=(
+            "Flag option to send a Slack report for the day for solid cancer "
+            "wgs workbook creation"
         ),
     )
 
@@ -506,10 +443,11 @@ if __name__ == "__main__":
         ),
     )
     config_override.add_argument(
-        "-clingen_upload_location",
-        "--clingen_upload_location",
+        "-clingen_download_location",
+        "--clingen_download_location",
         help=(
-            "Clingen location to upload data to (used to override config data)"
+            "Clingen location to download data to (used to override config "
+            "data)"
         ),
     )
 
