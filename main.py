@@ -268,7 +268,6 @@ def main(**args):
                 )
 
             for execution in executions:
-                sample_data = {}
                 job = dxpy.DXJob(execution["id"])
                 supplementary_html_file = dxpy.DXFile(
                     execution["runInput"]["supplementary_html"][
@@ -285,7 +284,7 @@ def main(**args):
                 )
 
                 if is_in_db is None:
-                    db.prepare_data_for_import(
+                    sample_data = db.prepare_data_for_import(
                         sc_wgs_table,
                         **{
                             "referral_id": sample_id,
