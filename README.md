@@ -8,7 +8,6 @@ The necessary inputs are:
 
 - The option for checking:
   - `-s` for checking new files, starting jobs and outputting the csv for the Confluence database
-    - `-t` for looking for files MODIFIED in the specified timeframe i.e. `1d` will check for files modified one day earlier at most. `s`, `m`, `h` can also be used for seconds, minutes and hours respectively
     - `-ids` can be used to specify dnanexus file ids. This will start jobs from those files.
     - `-l` can be used to specify local files, starting the process from the specified files.
   - `-c` for checking completed jobs and uploading the output of those jobs.
