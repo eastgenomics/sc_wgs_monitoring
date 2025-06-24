@@ -16,19 +16,19 @@ The necessary inputs are:
 
 ```sh
 # basic command
-docker exec ${container_id} sh -c 'python3 /app/sc_wgs_monitoring/main.py ...'
+docker run --rm ${image_id} sh -c 'python3 /app/sc_wgs_monitoring/main.py ...'
 
 # start workbook jobs from files detected in the config location
-docker exec ${container_id} sh -c 'python3 /app/sc_wgs_monitoring/main.py -s'
+docker run --rm ${image_id} sh -c 'python3 /app/sc_wgs_monitoring/main.py -s'
 # start workbook jobs from dnanexus files
-docker exec ${container_id} sh -c 'python3 /app/sc_wgs_monitoring/main.py -s -ids ${file_id} ${file_id} ${file_id}'
+docker run --rm ${image_id} sh -c 'python3 /app/sc_wgs_monitoring/main.py -s -ids ${file_id} ${file_id} ${file_id}'
 # start workbook jobs from local files
-docker exec ${container_id} sh -c 'python3 /app/sc_wgs_monitoring/main.py -s -l ${file} ${file} ${file}'
+docker run --rm ${image_id} sh -c 'python3 /app/sc_wgs_monitoring/main.py -s -l ${file} ${file} ${file}'
 
 # check for jobs finished in the last hour
-docker exec ${container_id} sh -c 'python3 /app/sc_wgs_monitoring/main.py -c -t 1h'
+docker run --rm ${image_id} sh -c 'python3 /app/sc_wgs_monitoring/main.py -c -t 1h'
 # upload files from the specified jobs
-docker exec ${container_id} sh -c 'python3 /app/sc_wgs_monitoring/main.py -c -ids ${job_id}'
+docker run --rm ${image_id} sh -c 'python3 /app/sc_wgs_monitoring/main.py -c -ids ${job_id}'
 ```
 
 ## Config
