@@ -1,4 +1,5 @@
 import logging.config
+from pathlib import Path
 
 
 LOGGING = {
@@ -48,4 +49,9 @@ LOGGING = {
 
 
 def set_up_logger():
+    """Set up the logger using the config dict in this file + create the log
+    folder if it doesn't exist"""
+
+    log_path = Path("/app/sc_wgs_monitoring/logs/")
+    log_path.mkdir(parents=True, exist_ok=True)
     logging.config.dictConfig(LOGGING)
