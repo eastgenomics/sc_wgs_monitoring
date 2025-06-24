@@ -154,8 +154,9 @@ def remove_pid_div_from_supplementary_file(
 
         if pid_div is not None:
             pid_div.decompose()
-
-        return soup
+            return soup
+        else:
+            return None
 
 
 def find_files_in_clingen_input_location(location: str) -> list:
