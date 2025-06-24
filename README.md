@@ -18,8 +18,8 @@ The necessary inputs are:
 # basic command
 docker exec ${container_id} sh -c 'python3 /app/sc_wgs_monitoring/main.py ...'
 
-# check for new files modified in the last 5 minutes
-docker exec ${container_id} sh -c 'python3 /app/sc_wgs_monitoring/main.py -s -t 5m'
+# start workbook jobs from files detected in the config location
+docker exec ${container_id} sh -c 'python3 /app/sc_wgs_monitoring/main.py -s'
 # start workbook jobs from dnanexus files
 docker exec ${container_id} sh -c 'python3 /app/sc_wgs_monitoring/main.py -s -ids ${file_id} ${file_id} ${file_id}'
 # start workbook jobs from local files
