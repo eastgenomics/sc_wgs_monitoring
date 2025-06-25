@@ -1,3 +1,4 @@
+from pathlib import PosixPath
 from typing import Dict
 import re
 
@@ -52,9 +53,23 @@ def upload_input_files(
         data[sample]["folder"] = folder
 
         for file in files:
-            dxfile = dxpy.upload_local_file(
-                file, project=project.id, folder=folder
-            )
+            if type(file) is PosixPath:
+                dxfile = dxpy.upload_local_file(
+                    file, project=project.id, folder=folder
+                )
+            else:
+                # tuple containing the file name and the html content
+                file_path_obj, html_content = file
+                dxfile = dxpy.DXFile()
+                dxfile.new(
+                    name=file_path_obj.name, project=project.id, folder=folder
+                )
+
+                dxfile.write(str(html_content))
+                dxfile.close()
+
+                # stupid dnanexus close() is useless, describe() is superior
+                dxfile.describe()
 
             data[sample].setdefault("files", []).append(dxfile)
 
