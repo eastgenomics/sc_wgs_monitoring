@@ -67,6 +67,7 @@ def main(**args):
     )
 
     base_log.info(header_msg.replace("\n", "").replace(":excel:", ""))
+    print(header_msg.replace("\n", "").replace(":excel:", ""), flush=True)
 
     if not args["start_jobs"] and not args["check_jobs"]:
         raise AssertionError(
@@ -137,24 +138,6 @@ def main(**args):
                     f"Got {" | ".join([file.name for file in new_files])}"
                 )
 
-            # get the supplementary files
-            supplementary_html_files = [
-                file
-                for file in new_files
-                if re.search(r".*\.supplementary\.html", file.name)
-            ]
-
-            # remove the pid div and write the new file
-            for file in supplementary_html_files:
-                new_html_content = (
-                    utils.remove_pid_div_from_supplementary_file(
-                        file,
-                        config_data["pid_div_id"],
-                    )
-                )
-
-                utils.write_file(file, new_html_content)
-
             # group files per id as a sense check
             sample_files = utils.get_sample_id_from_files(new_files, patterns)
 
@@ -170,6 +153,10 @@ def main(**args):
             base_log.info(
                 f"Detected the following files for processing:\n{message}"
             )
+            print(
+                f"Detected the following files for processing:\n{message}",
+                flush=True,
+            )
 
             unprocessed_sample_files = db.remove_processed_samples(
                 session, sc_wgs_table, sample_files
@@ -178,6 +165,10 @@ def main(**args):
             if unprocessed_sample_files == {}:
                 base_log.warning(
                     "All detected samples have already been processed",
+                )
+                print(
+                    "All detected samples have already been processed",
+                    flush=True,
                 )
                 sys.exit()
 
@@ -190,10 +181,36 @@ def main(**args):
                     "The following samples have already been processed:\n - "
                     f"{"\n - ".join(processed_samples)}\n",
                 )
+                print(
+                    "The following samples have already been processed:\n - "
+                    f"{"\n - ".join(processed_samples)}\n",
+                    flush=True,
+                )
+
+            sample_files = {}
+
+            # remove the pid div
+            for sample_id, files in unprocessed_sample_files.items():
+                new_files = []
+
+                for file in files:
+                    if file.name.endswith(".supplementary.html"):
+                        new_html_content = (
+                            utils.remove_pid_div_from_supplementary_file(
+                                file,
+                                config_data["pid_div_id"],
+                            )
+                        )
+
+                        new_files.append((file, new_html_content))
+                    else:
+                        new_files.append(file)
+
+                sample_files[sample_id] = new_files
 
             db_data = []
 
-            for sample_id in unprocessed_sample_files:
+            for sample_id in sample_files:
                 sample_data = db.prepare_data_for_import(
                     sc_wgs_table,
                     **{
@@ -207,6 +224,7 @@ def main(**args):
             db.insert_in_db(session, sc_wgs_table, db_data)
 
             base_log.info("Inserted data in db")
+            print("Inserted data in db", flush=True)
 
             # if dnanexus file ids were specified no need for upload
             if args["dnanexus_ids"]:
@@ -216,9 +234,10 @@ def main(**args):
 
             else:
                 dnanexus_data = dnanexus.upload_input_files(
-                    date, sd_wgs_project, unprocessed_sample_files
+                    date, sd_wgs_project, sample_files
                 )
                 base_log.info("Uploaded the files to DNAnexus")
+                print("Uploaded the files to DNAnexus", flush=True)
 
             args_for_starting_jobs = []
 
@@ -254,6 +273,7 @@ def main(**args):
                 )
 
             base_log.info("Jobs started, starting job monitoring...")
+            print("Jobs started, starting job monitoring...", flush=True)
 
             job_failures = utils.monitor_jobs(
                 session,
@@ -271,6 +291,7 @@ def main(**args):
 
         else:
             base_log.info("Couldn't find any files")
+            print("Couldn't find any files", flush=True)
 
     # check jobs that have finished
     if args["check_jobs"]:
@@ -287,6 +308,7 @@ def main(**args):
             )
             notifications.slack_notify(report, slack_log_channel, slack_token)
             base_log.info(report)
+            print(report, flush=True)
 
         else:
             if args["dnanexus_ids"]:
@@ -295,11 +317,24 @@ def main(**args):
                     for job_id in args["dnanexus_ids"]
                 ]
             else:
-                executions = dxpy.bindings.find_executions(
-                    executable=config_data["sd_wgs_workbook_app_id"],
-                    project=sd_wgs_project,
-                    created_after=f"-{args['time_to_check']}",
-                )
+                executions = [
+                    dxpy.DXJob(job["id"]).describe()
+                    for job in dxpy.bindings.find_executions(
+                        executable=config_data["sd_wgs_workbook_app_id"],
+                        project=sd_wgs_project,
+                        created_after=f"-{args['time_to_check']}",
+                    )
+                ]
+
+            base_log.info(
+                "Found the following jobs: "
+                f"{" | ".join([job["id"] for job in executions])}"
+            )
+            print(
+                "Found the following jobs: "
+                f"{" | ".join([job["id"] for job in executions])}",
+                flush=True,
+            )
 
             for execution in executions:
                 job = dxpy.DXJob(execution["id"])
@@ -331,6 +366,8 @@ def main(**args):
                         },
                     )
                     db.insert_in_db(session, sc_wgs_table, [sample_data])
+                    base_log.info(f"Inserted {sample_id} data")
+                    print(f"Inserted {sample_id} data", flush=True)
 
                 else:
                     db.update_in_db(
@@ -339,6 +376,8 @@ def main(**args):
                         sample_id,
                         {"job_status": job_status},
                     )
+                    base_log.info(f"Updated {sample_id} job status in db")
+                    print(f"Updated {sample_id} job status in db", flush=True)
 
                 if job_status == "done":
                     utils.download_file_and_update_db(
@@ -348,6 +387,14 @@ def main(**args):
                         config_data["clingen_download_location"],
                         job,
                     )
+                    base_log.info(f"Downloaded {sample_id} workbook")
+                    print(f"Downloaded {sample_id} workbook", flush=True)
+                else:
+                    base_log.info(f"{job.id} didn't finish successfully")
+                    print(f"{job.id} didn't finish successfully", flush=True)
+
+    base_log.info("Finished workbook monitoring")
+    print("Finished workbook monitoring", flush=True)
 
 
 if __name__ == "__main__":
