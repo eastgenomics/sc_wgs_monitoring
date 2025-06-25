@@ -16,22 +16,39 @@ The necessary inputs are:
 
 ```sh
 # basic command
-docker run --rm ${image_id} sh -c 'python3 /app/sc_wgs_monitoring/main.py ...'
+docker run --rm --env-file ${environment_config_file} --network ${name_of_the_network_in_docker-compose} --mount type=bind,src=${local_path_where_inputs_are_located},dst=/app/sc_wgs_monitoring/inputs --mount type=bind,src=${local_path_to_download_workbooks_to},dst=/app/sc_wgs_monitoring/output ${image_id} sh -c 'python3 /app/sc_wgs_monitoring/main.py ...'
 
 # start workbook jobs from files detected in the config location
-docker run --rm ${image_id} sh -c 'python3 /app/sc_wgs_monitoring/main.py -s'
+docker run --rm --env-file ${environment_config_file} --network ${name_of_the_network_in_docker-compose} --mount type=bind,src=${local_path_where_inputs_are_located},dst=/app/sc_wgs_monitoring/inputs --mount type=bind,src=${local_path_to_download_workbooks_to},dst=/app/sc_wgs_monitoring/output ${image_id} sh -c 'python3 /app/sc_wgs_monitoring/main.py -s'
 # start workbook jobs from dnanexus files
-docker run --rm ${image_id} sh -c 'python3 /app/sc_wgs_monitoring/main.py -s -ids ${file_id} ${file_id} ${file_id}'
+docker run --rm --env-file ${environment_config_file} --network ${name_of_the_network_in_docker-compose} --mount type=bind,src=${local_path_where_inputs_are_located},dst=/app/sc_wgs_monitoring/inputs --mount type=bind,src=${local_path_to_download_workbooks_to},dst=/app/sc_wgs_monitoring/output ${image_id} sh -c 'python3 /app/sc_wgs_monitoring/main.py -s -ids ${file_id} ${file_id} ${file_id}'
 # start workbook jobs from local files
-docker run --rm ${image_id} sh -c 'python3 /app/sc_wgs_monitoring/main.py -s -l ${file} ${file} ${file}'
+docker run --rm --env-file ${environment_config_file} --network ${name_of_the_network_in_docker-compose} --mount type=bind,src=${local_path_where_inputs_are_located},dst=/app/sc_wgs_monitoring/inputs --mount type=bind,src=${local_path_to_download_workbooks_to},dst=/app/sc_wgs_monitoring/output ${image_id} sh -c 'python3 /app/sc_wgs_monitoring/main.py -s -l ${file} ${file} ${file}'
 
 # check for jobs finished in the last hour
-docker run --rm ${image_id} sh -c 'python3 /app/sc_wgs_monitoring/main.py -c -t 1h'
+docker run --rm --env-file ${environment_config_file} --network ${name_of_the_network_in_docker-compose} --mount type=bind,src=${local_path_where_inputs_are_located},dst=/app/sc_wgs_monitoring/inputs --mount type=bind,src=${local_path_to_download_workbooks_to},dst=/app/sc_wgs_monitoring/output ${image_id} sh -c 'python3 /app/sc_wgs_monitoring/main.py -c -t 1h'
 # upload files from the specified jobs
-docker run --rm ${image_id} sh -c 'python3 /app/sc_wgs_monitoring/main.py -c -ids ${job_id}'
+docker run --rm --env-file ${environment_config_file} --network ${name_of_the_network_in_docker-compose} --mount type=bind,src=${local_path_where_inputs_are_located},dst=/app/sc_wgs_monitoring/inputs --mount type=bind,src=${local_path_to_download_workbooks_to},dst=/app/sc_wgs_monitoring/output ${image_id} sh -c 'python3 /app/sc_wgs_monitoring/main.py -c -ids ${job_id}'
 ```
 
-## Config
+## Configs
+
+### Environment variables config
+
+The environment config file contains variables which can't be stored in the app container itself such as tokens.
+
+```txt
+DNANEXUS_TOKEN=
+DB_NAME=
+DB_USER=
+DB_PASSWORD=
+HOST=
+SLACK_TOKEN=
+SLACK_LOG_CHANNEL=
+SLACK_ALERT_CHANNEL=
+```
+
+### App config
 
 The monitoring app uses a Python config file to allow customisation inputs, input and upload locations, app id...
 
@@ -45,7 +62,7 @@ CONFIG = {
         r"[-_]reported_variants\..*\.csv",
         r"\..*\.supplementary\.html",
     ],
-    "pid_div_id": "",
+    "pid_div_id": "pid",
     "sd_wgs_workbook_app_id": "",
     "workbook_inputs": {
         "hotspots": "",
