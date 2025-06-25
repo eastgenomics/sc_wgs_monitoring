@@ -154,9 +154,8 @@ def remove_pid_div_from_supplementary_file(
 
         if pid_div is not None:
             pid_div.decompose()
-            return soup
-        else:
-            return None
+
+        return soup
 
 
 def find_files_in_clingen_input_location(location: str) -> list:
@@ -263,15 +262,20 @@ def download_file_and_update_db(
         output_folder / f"{sample_id}.xlsx",
     )
 
-    db.update_in_db(
-        session,
-        table,
-        sample_id,
-        {
-            "workbook_clingen_location": download_location,
-            "processing_status": "Workbook downloaded",
-        },
-    )
+    if Path(output_folder / f"{sample_id}.xlsx").exists():
+        db.update_in_db(
+            session,
+            table,
+            sample_id,
+            {
+                "workbook_clingen_location": download_location,
+                "processing_status": "Workbook downloaded",
+            },
+        )
+    else:
+        raise FileNotFoundError(
+            f"{Path(output_folder / f'{sample_id}.xlsx')} wasn't downloaded"
+        )
 
 
 def start_parallel_workbook_jobs(
