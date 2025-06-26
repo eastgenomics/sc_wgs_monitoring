@@ -158,11 +158,19 @@ def main(**args):
                 flush=True,
             )
 
-            unprocessed_sample_files = db.remove_processed_samples(
+            sample_files_tagged = db.tag_processed_samples(
                 session, sc_wgs_table, sample_files
             )
 
-            if unprocessed_sample_files == {}:
+            if (
+                all(
+                    [
+                        data["processed"]
+                        for data in sample_files_tagged.values()
+                    ]
+                )
+                and not args["dnanexus_ids"]
+            ):
                 base_log.warning(
                     "All detected samples have already been processed",
                 )
@@ -172,69 +180,108 @@ def main(**args):
                 )
                 sys.exit()
 
-            processed_samples = set(sample_files.keys()) - set(
-                unprocessed_sample_files.keys()
-            )
+            processed_samples = [
+                sample
+                for sample, data in sample_files_tagged.items()
+                if data["processed"] is True
+            ]
 
             if processed_samples:
                 base_log.warning(
-                    "The following samples have already been processed:\n - "
+                    "The following samples are already in the database:\n - "
                     f"{"\n - ".join(processed_samples)}\n",
                 )
                 print(
-                    "The following samples have already been processed:\n - "
+                    "The following samples are already in the database:\n - "
                     f"{"\n - ".join(processed_samples)}\n",
                     flush=True,
                 )
 
-            sample_files = {}
-
-            # remove the pid div
-            for sample_id, files in unprocessed_sample_files.items():
-                new_files = []
-
-                for file in files:
-                    if file.name.endswith(".supplementary.html"):
-                        new_html_content = (
-                            utils.remove_pid_div_from_supplementary_file(
-                                file,
-                                config_data["pid_div_id"],
-                            )
-                        )
-
-                        new_files.append((file, new_html_content))
-                    else:
-                        new_files.append(file)
-
-                sample_files[sample_id] = new_files
-
             db_data = []
 
-            for sample_id in sample_files:
-                sample_data = db.prepare_data_for_import(
-                    sc_wgs_table,
-                    **{
-                        "referral_id": sample_id,
-                        "date": date,
-                        "processing_status": "Preprocessing before job start",
-                    },
-                )
-                db_data.append(sample_data)
-
-            db.insert_in_db(session, sc_wgs_table, db_data)
-
-            base_log.info("Inserted data in db")
-            print("Inserted data in db", flush=True)
-
-            # if dnanexus file ids were specified no need for upload
+            # if dnanexus file ids were specified no need for upload or removal
+            # of pid
             if args["dnanexus_ids"]:
-                dnanexus_data = dnanexus.organise_data_for_processing(
-                    unprocessed_sample_files
-                )
+                for sample_id, data in sample_files_tagged.items():
+                    # add the folder key to match the data structure in the
+                    # else
+                    sample_files_tagged[sample_id][
+                        "folder"
+                    ] = f"/{date}/{sample_id}"
+                    # make DXFiles for use later
+                    sample_files_tagged[sample_id]["files"] = [
+                        dxpy.DXFile(file)
+                        for file in sample_files_tagged[sample_id]["files"]
+                    ]
+
+                    if data["processed"]:
+                        db.update_in_db(
+                            session,
+                            sc_wgs_table,
+                            sample_id,
+                            {
+                                "processing_status": "Preprocessing before job start",
+                                "date": date,
+                            },
+                        )
+                    else:
+                        sample_data = db.prepare_data_for_import(
+                            sc_wgs_table,
+                            **{
+                                "referral_id": sample_id,
+                                "date": date,
+                                "processing_status": "Preprocessing before job start",
+                            },
+                        )
+                        db_data.append(sample_data)
+
+                db.insert_in_db(session, sc_wgs_table, db_data)
+
+                # rename the variable in order to standadize naming afterward
+                dnanexus_data = sample_files_tagged
 
             else:
+                # remove the pid div only on unprocessed samples
+                sample_files_tagged = {
+                    sample_id: [
+                        (
+                            (
+                                file,
+                                (
+                                    utils.remove_pid_div_from_supplementary_file(
+                                        file,
+                                        config_data["pid_div_id"],
+                                    )
+                                ),
+                            )
+                            if file.name.endswith(".supplementary.html")
+                            else file
+                        )
+                        for file in data["files"]
+                    ]
+                    for sample_id, data in sample_files_tagged.items()
+                    if data["processed"] is False
+                }
+
+                for sample_id in sample_files_tagged:
+                    # prepare the import the unprocessed data in the database
+                    sample_data = db.prepare_data_for_import(
+                        sc_wgs_table,
+                        **{
+                            "referral_id": sample_id,
+                            "date": date,
+                            "processing_status": "Preprocessing before job start",
+                        },
+                    )
+                    db_data.append(sample_data)
+
+                db.insert_in_db(session, sc_wgs_table, db_data)
+
+                base_log.info("Inserted data in db")
+                print("Inserted data in db", flush=True)
+
                 dnanexus_data = dnanexus.upload_input_files(
-                    date, sd_wgs_project, sample_files
+                    date, sd_wgs_project, sample_files_tagged
                 )
                 base_log.info("Uploaded the files to DNAnexus")
                 print("Uploaded the files to DNAnexus", flush=True)
@@ -257,13 +304,6 @@ def main(**args):
             jobs, errors = utils.start_parallel_workbook_jobs(
                 session, sc_wgs_table, args_for_starting_jobs
             )
-
-            if errors:
-                notifications.slack_notify(
-                    f"{header_msg + '\n'.join(errors)}",
-                    slack_alert_channel,
-                    slack_token,
-                )
 
             if errors:
                 notifications.slack_notify(
@@ -313,18 +353,18 @@ def main(**args):
         else:
             if args["dnanexus_ids"]:
                 executions = [
-                    dxpy.DXJob(dxid=job_id).describe()
-                    for job_id in args["dnanexus_ids"]
+                    {"id": job_id} for job_id in args["dnanexus_ids"]
                 ]
             else:
-                executions = [
-                    dxpy.DXJob(job["id"]).describe()
-                    for job in dxpy.bindings.find_executions(
+                # store the job generator in a list so it doesn't get exhausted
+                # the first time i go through it
+                executions = list(
+                    dxpy.bindings.find_executions(
                         executable=config_data["sd_wgs_workbook_app_id"],
                         project=sd_wgs_project,
                         created_after=f"-{args['time_to_check']}",
                     )
-                ]
+                )
 
             base_log.info(
                 "Found the following jobs: "
