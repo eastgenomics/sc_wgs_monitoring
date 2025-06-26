@@ -151,9 +151,7 @@ def get_samples_for_the_day(
     return data
 
 
-def remove_processed_samples(
-    session: Session, table: Table, files: dict
-) -> dict:
+def tag_processed_samples(session: Session, table: Table, files: dict) -> dict:
     """Remove processed samples from detected sample dict
 
     Parameters
@@ -172,7 +170,7 @@ def remove_processed_samples(
         removed
     """
 
-    files_without_processed_samples = {}
+    files_with_tagged_processed_status = {}
 
     # query the database to find samples that have already been
     # processed
@@ -182,9 +180,17 @@ def remove_processed_samples(
         )
 
         if processed_sample is None:
-            files_without_processed_samples[sample_id] = files[sample_id]
+            files_with_tagged_processed_status[sample_id] = {
+                "processed": False
+            }
+        else:
+            files_with_tagged_processed_status[sample_id] = {"processed": True}
 
-    return files_without_processed_samples
+        files_with_tagged_processed_status[sample_id]["files"] = files[
+            sample_id
+        ]
+
+    return files_with_tagged_processed_status
 
 
 def prepare_data_for_import(table, **kwargs):
