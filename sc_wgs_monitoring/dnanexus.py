@@ -1,3 +1,4 @@
+from pathlib import PosixPath
 from typing import Dict
 import re
 
@@ -52,9 +53,23 @@ def upload_input_files(
         data[sample]["folder"] = folder
 
         for file in files:
-            dxfile = dxpy.upload_local_file(
-                file, project=project.id, folder=folder
-            )
+            if type(file) is PosixPath:
+                dxfile = dxpy.upload_local_file(
+                    file, project=project.id, folder=folder
+                )
+            else:
+                # tuple containing the file name and the html content
+                file_path_obj, html_content = file
+                dxfile = dxpy.DXFile()
+                dxfile.new(
+                    name=file_path_obj.name, project=project.id, folder=folder
+                )
+
+                dxfile.write(str(html_content))
+                dxfile.close()
+
+                # stupid dnanexus close() is useless, describe() is superior
+                dxfile.describe()
 
             data[sample].setdefault("files", []).append(dxfile)
 
@@ -107,34 +122,6 @@ def assign_dxfile_to_workbook_input(file: dxpy.DXFile, patterns: dict) -> dict:
     raise AssertionError(
         "Couldn't match a dnanexus filename to an expected workbook input name"
     )
-
-
-def organise_data_for_processing(sample_files: dict) -> dict:
-    """Organise data for processing before preparing the inputs
-
-    Parameters
-    ----------
-    sample_files : dict
-        Dict containing sample ids and files
-
-    Returns
-    -------
-    dict
-        Dict containing the sample, the files and their folder
-    """
-
-    dnanexus_data = {}
-
-    # go through the dnanexus file ids and match them to the
-    # sample id
-    for sample_id, files in sample_files.items():
-        dnanexus_data.setdefault(sample_id, {})
-
-        for file in files:
-            dnanexus_data[sample_id].setdefault("files", []).append(file)
-            dnanexus_data[sample_id]["folder"] = file.folder
-
-    return dnanexus_data
 
 
 def prepare_inputs(

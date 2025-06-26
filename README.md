@@ -8,7 +8,6 @@ The necessary inputs are:
 
 - The option for checking:
   - `-s` for checking new files, starting jobs and outputting the csv for the Confluence database
-    - `-t` for looking for files MODIFIED in the specified timeframe i.e. `1d` will check for files modified one day earlier at most. `s`, `m`, `h` can also be used for seconds, minutes and hours respectively
     - `-ids` can be used to specify dnanexus file ids. This will start jobs from those files.
     - `-l` can be used to specify local files, starting the process from the specified files.
   - `-c` for checking completed jobs and uploading the output of those jobs.
@@ -17,22 +16,39 @@ The necessary inputs are:
 
 ```sh
 # basic command
-docker exec ${container_id} sh -c 'python3 /app/sc_wgs_monitoring/main.py ...'
+docker run --rm --env-file ${environment_config_file} --network ${name_of_the_network_in_docker-compose} --mount type=bind,src=${local_path_where_inputs_are_located},dst=/app/sc_wgs_monitoring/inputs --mount type=bind,src=${local_path_to_download_workbooks_to},dst=/app/sc_wgs_monitoring/output ${image_id} sh -c 'python3 /app/sc_wgs_monitoring/main.py ...'
 
-# check for new files modified in the last 5 minutes
-docker exec ${container_id} sh -c 'python3 /app/sc_wgs_monitoring/main.py -s -t 5m'
+# start workbook jobs from files detected in the config location
+docker run --rm --env-file ${environment_config_file} --network ${name_of_the_network_in_docker-compose} --mount type=bind,src=${local_path_where_inputs_are_located},dst=/app/sc_wgs_monitoring/inputs --mount type=bind,src=${local_path_to_download_workbooks_to},dst=/app/sc_wgs_monitoring/output ${image_id} sh -c 'python3 /app/sc_wgs_monitoring/main.py -s'
 # start workbook jobs from dnanexus files
-docker exec ${container_id} sh -c 'python3 /app/sc_wgs_monitoring/main.py -s -ids ${file_id} ${file_id} ${file_id}'
+docker run --rm --env-file ${environment_config_file} --network ${name_of_the_network_in_docker-compose} --mount type=bind,src=${local_path_where_inputs_are_located},dst=/app/sc_wgs_monitoring/inputs --mount type=bind,src=${local_path_to_download_workbooks_to},dst=/app/sc_wgs_monitoring/output ${image_id} sh -c 'python3 /app/sc_wgs_monitoring/main.py -s -ids ${file_id} ${file_id} ${file_id}'
 # start workbook jobs from local files
-docker exec ${container_id} sh -c 'python3 /app/sc_wgs_monitoring/main.py -s -l ${file} ${file} ${file}'
+docker run --rm --env-file ${environment_config_file} --network ${name_of_the_network_in_docker-compose} --mount type=bind,src=${local_path_where_inputs_are_located},dst=/app/sc_wgs_monitoring/inputs --mount type=bind,src=${local_path_to_download_workbooks_to},dst=/app/sc_wgs_monitoring/output ${image_id} sh -c 'python3 /app/sc_wgs_monitoring/main.py -s -l ${file} ${file} ${file}'
 
 # check for jobs finished in the last hour
-docker exec ${container_id} sh -c 'python3 /app/sc_wgs_monitoring/main.py -c -t 1h'
+docker run --rm --env-file ${environment_config_file} --network ${name_of_the_network_in_docker-compose} --mount type=bind,src=${local_path_where_inputs_are_located},dst=/app/sc_wgs_monitoring/inputs --mount type=bind,src=${local_path_to_download_workbooks_to},dst=/app/sc_wgs_monitoring/output ${image_id} sh -c 'python3 /app/sc_wgs_monitoring/main.py -c -t 1h'
 # upload files from the specified jobs
-docker exec ${container_id} sh -c 'python3 /app/sc_wgs_monitoring/main.py -c -ids ${job_id}'
+docker run --rm --env-file ${environment_config_file} --network ${name_of_the_network_in_docker-compose} --mount type=bind,src=${local_path_where_inputs_are_located},dst=/app/sc_wgs_monitoring/inputs --mount type=bind,src=${local_path_to_download_workbooks_to},dst=/app/sc_wgs_monitoring/output ${image_id} sh -c 'python3 /app/sc_wgs_monitoring/main.py -c -ids ${job_id}'
 ```
 
-## Config
+## Configs
+
+### Environment variables config
+
+The environment config file contains variables which can't be stored in the app container itself such as tokens.
+
+```txt
+DNANEXUS_TOKEN=
+DB_NAME=
+DB_USER=
+DB_PASSWORD=
+HOST=
+SLACK_TOKEN=
+SLACK_LOG_CHANNEL=
+SLACK_ALERT_CHANNEL=
+```
+
+### App config
 
 The monitoring app uses a Python config file to allow customisation inputs, input and upload locations, app id...
 
@@ -46,7 +62,7 @@ CONFIG = {
         r"[-_]reported_variants\..*\.csv",
         r"\..*\.supplementary\.html",
     ],
-    "pid_div_id": "",
+    "pid_div_id": "pid",
     "sd_wgs_workbook_app_id": "",
     "workbook_inputs": {
         "hotspots": "",

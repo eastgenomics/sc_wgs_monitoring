@@ -1,4 +1,5 @@
 import concurrent
+import datetime
 import importlib.util
 from pathlib import Path
 from typing import Dict
@@ -251,21 +252,30 @@ def download_file_and_update_db(
         DXJob object for the workbook job for the given sample
     """
 
+    today = datetime.date.today().strftime("%Y-%m")
+    output_folder = Path(f"{download_location}/{today}/{sample_id}")
+    output_folder.mkdir(parents=True, exist_ok=True)
+
     output_id = dnanexus.get_output_id(job.describe())
     dxpy.bindings.dxfile_functions.download_dxfile(
         output_id,
-        f"{download_location}/" f"{sample_id}.xlsx",
+        output_folder / f"{sample_id}.xlsx",
     )
 
-    db.update_in_db(
-        session,
-        table,
-        sample_id,
-        {
-            "workbook_clingen_location": download_location,
-            "processing_status": "Workbook downloaded",
-        },
-    )
+    if Path(output_folder / f"{sample_id}.xlsx").exists():
+        db.update_in_db(
+            session,
+            table,
+            sample_id,
+            {
+                "workbook_clingen_location": f"{output_folder}",
+                "processing_status": "Workbook downloaded",
+            },
+        )
+    else:
+        raise FileNotFoundError(
+            f"{Path(output_folder / f'{sample_id}.xlsx')} wasn't downloaded"
+        )
 
 
 def start_parallel_workbook_jobs(
