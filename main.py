@@ -162,15 +162,9 @@ def main(**args):
                 session, sc_wgs_table, sample_files
             )
 
-            if (
-                all(
-                    [
-                        data["processed"]
-                        for data in sample_files_tagged.values()
-                    ]
-                )
-                and not args["dnanexus_ids"]
-            ):
+            if all(
+                [data["processed"] for data in sample_files_tagged.values()]
+            ) and (not args["dnanexus_ids"] and not args["local_files"]):
                 base_log.warning(
                     "All detected samples have already been processed",
                 )
@@ -208,9 +202,13 @@ def main(**args):
                     sample_files_tagged[sample_id][
                         "folder"
                     ] = f"/{date}/{sample_id}"
-                    # make DXFiles for use later
+                    # make DXFiles for use later if necessary
                     sample_files_tagged[sample_id]["files"] = [
-                        dxpy.DXFile(file)
+                        (
+                            dxpy.DXFile(file)
+                            if type(file) is not dxpy.DXFile
+                            else file
+                        )
                         for file in sample_files_tagged[sample_id]["files"]
                     ]
 
@@ -260,7 +258,7 @@ def main(**args):
                         for file in data["files"]
                     ]
                     for sample_id, data in sample_files_tagged.items()
-                    if data["processed"] is False
+                    if data["processed"] is False or args["local_files"]
                 }
 
                 for sample_id in sample_files_tagged:
@@ -275,10 +273,15 @@ def main(**args):
                     )
                     db_data.append(sample_data)
 
-                db.insert_in_db(session, sc_wgs_table, db_data)
+                if db_data:
+                    db.insert_in_db(session, sc_wgs_table, db_data)
 
-                base_log.info("Inserted data in db")
-                print("Inserted data in db", flush=True)
+                    base_log.info("Inserted data in db")
+                    print("Inserted data in db", flush=True)
+                else:
+                    base_log.warning("Data couldn't be imported")
+                    print("Data couldn't be imported", flush=True)
+                    sys.exit()
 
                 dnanexus_data = dnanexus.upload_input_files(
                     date, sd_wgs_project, sample_files_tagged
