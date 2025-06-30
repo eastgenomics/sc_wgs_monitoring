@@ -57,7 +57,7 @@ SLACK_ALERT_CHANNEL=
 
 The monitoring app uses a Python config file to allow customisation inputs, input and upload locations, app id...
 
-The repo has a default config file: `/app/sc_wgs_monitoring/config.py`. Default values can be overriden by using `-config` or using `config_override --key_name` with key name being the key in the config file described below:
+The repo has a default config file: `/app/sc_wgs_monitoring/config.py`. Default values can be overriden by using `--config` or using `config_override --key_name` with key name being the key in the config file described below:
 
 ```python
 CONFIG = {
@@ -81,3 +81,6 @@ CONFIG = {
     "clingen_download_location": "",
 }
 ```
+
+> [!WARNING]
+> If providing a new config using the `--config` option, you have to use a "container" path i.e. a path existing in the container.
