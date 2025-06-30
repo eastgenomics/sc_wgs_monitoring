@@ -83,4 +83,4 @@ CONFIG = {
 ```
 
 > [!WARNING]
-> If providing a new config using the `--config` option, you have to use a "container" path i.e. a path existing in the container.
+> If providing a new config using the `--config` option, you have to use a "container" path i.e. a path existing in the container. So you either have to mount a new folder or you can use an already mounted volume to put your new config file in.
