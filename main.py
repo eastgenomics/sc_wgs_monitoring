@@ -69,9 +69,9 @@ def main(**args):
     base_log.info(header_msg.replace("\n", "").replace(":excel:", ""))
     print(header_msg.replace("\n", "").replace(":excel:", ""), flush=True)
 
-    if not args["start_jobs"] and not args["check_jobs"]:
+    if not args["start_jobs"] and not args["download_job_output"]:
         raise AssertionError(
-            "No processing type specified, please use -s or -c"
+            "No processing type specified, please use -s or -j"
         )
 
     # start WGS workbook jobs
@@ -337,7 +337,7 @@ def main(**args):
             print("Couldn't find any files", flush=True)
 
     # check jobs that have finished
-    if args["check_jobs"]:
+    if args["download_job_output"]:
         if args["daily_report"]:
             now = datetime.datetime.strptime(now, "%y%m%d | %H:%M:%S")
             jobs_for_day = db.get_samples_for_the_day(
@@ -443,7 +443,7 @@ def main(**args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "-config",
+        "-c",
         "--config",
         required=False,
         default="/app/sc_wgs_monitoring/config/sc_wgs_monitoring/config.py",
@@ -494,11 +494,14 @@ if __name__ == "__main__":
         help="Flag argument required for starting jobs",
     )
     type_processing.add_argument(
-        "-c",
-        "--check_jobs",
+        "-j",
+        "--download_job_output",
         action="store_true",
         default=False,
-        help="Flag argument required for checking jobs",
+        help=(
+            "Flag argument required for downloading output and updating the "
+            "database from jobs"
+        ),
     )
 
     subparser = parser.add_subparsers(help="")
