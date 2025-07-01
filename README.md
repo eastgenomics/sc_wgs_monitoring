@@ -24,11 +24,16 @@ docker run --rm --env-file ${environment_config_file} --network ${name_of_the_ne
 docker run --rm --env-file ${environment_config_file} --network ${name_of_the_network_in_docker-compose} --mount type=bind,src=${local_path_where_inputs_are_located},dst=/app/sc_wgs_monitoring/inputs --mount type=bind,src=${local_path_to_download_workbooks_to},dst=/app/sc_wgs_monitoring/output ${image_id} sh -c 'python3 /app/sc_wgs_monitoring/main.py -s -ids ${file_id} ${file_id} ${file_id}'
 # start workbook jobs from local files
 docker run --rm --env-file ${environment_config_file} --network ${name_of_the_network_in_docker-compose} --mount type=bind,src=${local_path_where_inputs_are_located},dst=/app/sc_wgs_monitoring/inputs --mount type=bind,src=${local_path_to_download_workbooks_to},dst=/app/sc_wgs_monitoring/output ${image_id} sh -c 'python3 /app/sc_wgs_monitoring/main.py -s -l ${file} ${file} ${file}'
+# override config file using individual config key
+docker run --rm --env-file ${environment_config_file} --network ${name_of_the_network_in_docker-compose} --mount type=bind,src=${local_path_where_inputs_are_located},dst=/app/sc_wgs_monitoring/inputs --mount type=bind,src=${local_path_to_download_workbooks_to},dst=/app/sc_wgs_monitoring/output ${image_id} sh -c 'python3 /app/sc_wgs_monitoring/main.py -s config_override -project_id project-xxxxxxxxxxxxxxxxxxxxxxxx'
+# override config file using new config file
+docker run --rm --env-file ${environment_config_file} --network ${name_of_the_network_in_docker-compose} --mount type=bind,src=${local_path_where_inputs_are_located},dst=/app/sc_wgs_monitoring/inputs --mount type=bind,src=${local_path_to_download_workbooks_to},dst=/app/sc_wgs_monitoring/output ${image_id} sh -c 'python3 /app/sc_wgs_monitoring/main.py -s -c /app/sc_wgs_monitoring/inputs/new_config'
+
 
 # check for jobs finished in the last hour
-docker run --rm --env-file ${environment_config_file} --network ${name_of_the_network_in_docker-compose} --mount type=bind,src=${local_path_where_inputs_are_located},dst=/app/sc_wgs_monitoring/inputs --mount type=bind,src=${local_path_to_download_workbooks_to},dst=/app/sc_wgs_monitoring/output ${image_id} sh -c 'python3 /app/sc_wgs_monitoring/main.py -c -t 1h'
+docker run --rm --env-file ${environment_config_file} --network ${name_of_the_network_in_docker-compose} --mount type=bind,src=${local_path_where_inputs_are_located},dst=/app/sc_wgs_monitoring/inputs --mount type=bind,src=${local_path_to_download_workbooks_to},dst=/app/sc_wgs_monitoring/output ${image_id} sh -c 'python3 /app/sc_wgs_monitoring/main.py -j -t 1h'
 # upload files from the specified jobs
-docker run --rm --env-file ${environment_config_file} --network ${name_of_the_network_in_docker-compose} --mount type=bind,src=${local_path_where_inputs_are_located},dst=/app/sc_wgs_monitoring/inputs --mount type=bind,src=${local_path_to_download_workbooks_to},dst=/app/sc_wgs_monitoring/output ${image_id} sh -c 'python3 /app/sc_wgs_monitoring/main.py -c -ids ${job_id}'
+docker run --rm --env-file ${environment_config_file} --network ${name_of_the_network_in_docker-compose} --mount type=bind,src=${local_path_where_inputs_are_located},dst=/app/sc_wgs_monitoring/inputs --mount type=bind,src=${local_path_to_download_workbooks_to},dst=/app/sc_wgs_monitoring/output ${image_id} sh -c 'python3 /app/sc_wgs_monitoring/main.py -j -ids ${job_id}'
 ```
 
 ## Configs
@@ -52,7 +57,7 @@ SLACK_ALERT_CHANNEL=
 
 The monitoring app uses a Python config file to allow customisation inputs, input and upload locations, app id...
 
-The repo has a default config file: `/app/sc_wgs_monitoring/config.py`. Default values can be overriden by using `-config` or using `config_override --key_name` with key name being the key in the config file described below:
+The repo has a default config file: `/app/sc_wgs_monitoring/config.py`. Default values can be overriden by using `--config` or using `config_override --key_name` with key name being the key in the config file described below:
 
 ```python
 CONFIG = {
@@ -76,3 +81,6 @@ CONFIG = {
     "clingen_download_location": "",
 }
 ```
+
+> [!WARNING]
+> If providing a new config using the `--config` option, you have to use a "container" path i.e. a path existing in the container. So you either have to mount a new folder or you can use an already mounted volume to put your new config file in.
