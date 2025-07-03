@@ -340,10 +340,11 @@ def main(**args):
                         job,
                     )
 
-                # move the input files
-                utils.move_files(
-                    download_folder, *sample_files_tagged[sample_id]
-                )
+                # move the input files only if they are not dnanexus files
+                if not args["dnanexus_ids"]:
+                    utils.move_files(
+                        download_folder, *sample_files_tagged[sample_id]
+                    )
 
             if job_failures:
                 notifications.slack_notify(
