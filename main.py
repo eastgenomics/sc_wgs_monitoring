@@ -304,7 +304,7 @@ def main(**args):
                     )
                 )
 
-            jobs, errors = utils.start_parallel_workbook_jobs(
+            sample_jobs, errors = utils.start_parallel_workbook_jobs(
                 session, sc_wgs_table, args_for_starting_jobs
             )
 
@@ -319,11 +319,31 @@ def main(**args):
             print("Jobs started, starting job monitoring...", flush=True)
 
             job_failures = utils.monitor_jobs(
-                session,
-                sc_wgs_table,
-                jobs,
-                config_data["clingen_download_location"],
+                session, sc_wgs_table, sample_jobs.values()
             )
+
+            # prepare the download of the output of the workbook
+            for sample_id, job_id in sample_jobs.items():
+                job = dxpy.DXJob(job_id)
+                download_folder = utils.create_output_folder(
+                    sample_id, config_data["clingen_download_location"]
+                )
+
+                # download the file to clingen and update db with the
+                # location
+                if job.state == "done":
+                    utils.download_file_and_update_db(
+                        session,
+                        sc_wgs_table,
+                        sample_id,
+                        download_folder,
+                        job,
+                    )
+
+                # move the input files
+                utils.move_files(
+                    download_folder, *sample_files_tagged[sample_id]
+                )
 
             if job_failures:
                 notifications.slack_notify(
