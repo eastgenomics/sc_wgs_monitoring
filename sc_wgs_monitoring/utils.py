@@ -153,7 +153,7 @@ def remove_pid_div_from_supplementary_file(
         pid_div = soup.find("div", id=pid_div_id)
 
         if pid_div is not None:
-            pid_div.parent.decompose()
+            pid_div.decompose()
 
         return soup
 
