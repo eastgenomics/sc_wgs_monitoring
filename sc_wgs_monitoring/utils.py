@@ -1,10 +1,11 @@
 import concurrent
 import datetime
 import importlib.util
-from pathlib import Path
+from pathlib import Path, PosixPath
 from typing import Dict
 import os
 import re
+from shutil import move
 import sys
 
 from bs4 import BeautifulSoup
@@ -228,6 +229,28 @@ def write_file(file_name: str, file_content: str):
         f.write(str(file_content))
 
 
+def create_output_folder(sample_id: str, location: str) -> PosixPath:
+    """Create the output folder for the WGS workbook jobs
+
+    Parameters
+    ----------
+    sample_id : str
+        Sample id
+    location : str
+        Root location for all the output folder
+
+    Returns
+    -------
+    PosixPath
+        Path of the created folder
+    """
+
+    today = datetime.date.today().strftime("%Y-%m")
+    output_folder = Path(f"{location}/{today}/{sample_id}")
+    output_folder.mkdir(parents=True, exist_ok=True)
+    return output_folder
+
+
 def download_file_and_update_db(
     session: Session,
     table: Table,
@@ -252,30 +275,48 @@ def download_file_and_update_db(
         DXJob object for the workbook job for the given sample
     """
 
-    today = datetime.date.today().strftime("%Y-%m")
-    output_folder = Path(f"{download_location}/{today}/{sample_id}")
-    output_folder.mkdir(parents=True, exist_ok=True)
-
     output_id = dnanexus.get_output_id(job.describe())
     dxpy.bindings.dxfile_functions.download_dxfile(
         output_id,
-        output_folder / f"{sample_id}.xlsx",
+        download_location / f"{sample_id}.xlsx",
     )
 
-    if Path(output_folder / f"{sample_id}.xlsx").exists():
+    if Path(download_location / f"{sample_id}.xlsx").exists():
         db.update_in_db(
             session,
             table,
             sample_id,
             {
-                "workbook_clingen_location": f"{output_folder}",
+                "workbook_clingen_location": f"{download_location}",
                 "processing_status": "Workbook downloaded",
             },
         )
     else:
         raise FileNotFoundError(
-            f"{Path(output_folder / f'{sample_id}.xlsx')} wasn't downloaded"
+            f"{Path(download_location / f'{sample_id}.xlsx')} wasn't downloaded"
         )
+
+
+def move_files(location: str, *files_to_move) -> None:
+    """Move list of files to given location
+
+    Parameters
+    ----------
+    location : str
+        Location in which to move the data in
+    files_to_move : *args
+        Iterable of files to move
+    """
+
+    new_folder = Path(location)
+
+    for file in files_to_move:
+        if type(file) is not PosixPath:
+            for f in file:
+                if type(f) is PosixPath:
+                    move(f, new_folder / f.name)
+        else:
+            move(file, new_folder / file.name)
 
 
 def start_parallel_workbook_jobs(
@@ -298,7 +339,7 @@ def start_parallel_workbook_jobs(
         List of job objects created by DNAnexus
     """
 
-    jobs = []
+    sample_jobs = {}
     errors = []
 
     # start the jobs
@@ -325,7 +366,7 @@ def start_parallel_workbook_jobs(
 
             try:
                 job = future.result()
-                jobs.append(job.id)
+                sample_jobs[sample_id] = job.id
 
             except Exception as exc:
                 errors.append(f"{sample_id} generated an exception: {exc}")
@@ -342,12 +383,10 @@ def start_parallel_workbook_jobs(
                 },
             )
 
-    return jobs, errors
+    return sample_jobs, errors
 
 
-def monitor_jobs(
-    session: Session, table: Table, jobs: list, clingen_download_location: str
-) -> list:
+def monitor_jobs(session: Session, table: Table, jobs: list) -> list:
     """Monitor the running jobs and act accordingly when they finish.
 
     Parameters
@@ -358,8 +397,6 @@ def monitor_jobs(
         SQLAlchemy Table object
     jobs : list
         List of job objects to monitor
-    clingen_download_location : str
-        Download location for the output of the jobs
 
     Returns
     -------
@@ -385,9 +422,14 @@ def monitor_jobs(
                 job_failures.append(
                     f"- `{job.id}` has been running for more than 1h"
                 )
+                processing_status = "Job has been running for more than an 1h"
+            else:
+                if job_status != "done":
+                    job_failures.append(f"- `{job.id}` | {job_status}")
+                    processing_status = "Job didn't finish successfully"
 
-            if job_status != "done":
-                job_failures.append(f"- `{job.id}` | {job_status}")
+                else:
+                    processing_status = "Job finished"
 
             # check the job statuses, update the db and download the files in
             # the appropriate locations
@@ -397,19 +439,8 @@ def monitor_jobs(
                 sample_id,
                 {
                     "job_status": job_status,
-                    "processing_status": "Job finished",
+                    "processing_status": processing_status,
                 },
             )
-
-            # download the file to clingen and update db with the
-            # location
-            if job_status == "done":
-                download_file_and_update_db(
-                    session,
-                    table,
-                    sample_id,
-                    clingen_download_location,
-                    job,
-                )
 
     return job_failures
