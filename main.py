@@ -150,10 +150,16 @@ def main(**args):
                     message += f"  - {file.name}\n"
 
             base_log.info(
-                f"Detected the following files for processing:\n{message}"
+                (
+                    f"Detected {len(sample_files)} samples with the following "
+                    f"files for processing:\n{message}"
+                )
             )
             print(
-                f"Detected the following files for processing:\n{message}",
+                (
+                    f"Detected {len(sample_files)} samples with the following "
+                    f"files for processing:\n{message}"
+                ),
                 flush=True,
             )
 
@@ -275,8 +281,8 @@ def main(**args):
                 if db_data:
                     db.insert_in_db(session, sc_wgs_table, db_data)
 
-                    base_log.info("Inserted data in db")
-                    print("Inserted data in db", flush=True)
+                    base_log.info(f"Inserted {len(db_data)} samples in db")
+                    print(f"Inserted {len(db_data)} samples in db", flush=True)
                 else:
                     base_log.warning("Data couldn't be imported")
                     print("Data couldn't be imported", flush=True)
@@ -285,8 +291,13 @@ def main(**args):
                 dnanexus_data = dnanexus.upload_input_files(
                     date, sd_wgs_project, sample_files_tagged
                 )
-                base_log.info("Uploaded the files to DNAnexus")
-                print("Uploaded the files to DNAnexus", flush=True)
+                base_log.info(
+                    f"Uploaded {len(dnanexus_data.values())} files to DNAnexus"
+                )
+                print(
+                    f"Uploaded {len(dnanexus_data.values())} files to DNAnexus",
+                    flush=True,
+                )
 
             args_for_starting_jobs = []
 
@@ -314,8 +325,13 @@ def main(**args):
                     slack_token,
                 )
 
-            base_log.info("Jobs started, starting job monitoring...")
-            print("Jobs started, starting job monitoring...", flush=True)
+            base_log.info(
+                f"{len(sample_jobs)} jobs started, starting job monitoring..."
+            )
+            print(
+                f"{len(sample_jobs)} jobs started, starting job monitoring...",
+                flush=True,
+            )
 
             job_failures = utils.monitor_jobs(
                 session, sc_wgs_table, sample_jobs.values()
