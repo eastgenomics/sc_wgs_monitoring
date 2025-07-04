@@ -2,7 +2,6 @@ import argparse
 import datetime
 import logging
 from pathlib import Path
-import re
 import sys
 
 import dxpy
@@ -118,8 +117,8 @@ def main(**args):
 
             # handle file detection
             else:
-                new_files = utils.find_files_in_clingen_input_location(
-                    config_data["clingen_input_location"]
+                new_files = utils.find_input_files_in_clingen_input_location(
+                    config_data["clingen_input_location"], patterns
                 )
 
         if new_files:
