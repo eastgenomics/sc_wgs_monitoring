@@ -159,13 +159,17 @@ def remove_pid_div_from_supplementary_file(
         return soup
 
 
-def find_files_in_clingen_input_location(location: str) -> list:
+def find_input_files_in_clingen_input_location(
+    location: str, patterns: list
+) -> list:
     """Return all files present in the given location
 
     Parameters
     ----------
     location : str
         Path in which to look for files
+    patterns : list
+        List of patterns of the expected files
 
     Returns
     -------
@@ -173,7 +177,12 @@ def find_files_in_clingen_input_location(location: str) -> list:
         List of all the files present at that location
     """
 
-    return [path for path in Path(location).iterdir()]
+    return [
+        Path(root / file)
+        for root, dirs, files in Path(location).walk()
+        for file in files
+        if check.check_file_input_name_is_correct(file, patterns)
+    ]
 
 
 def convert_time_to_epoch(time: str) -> int:
