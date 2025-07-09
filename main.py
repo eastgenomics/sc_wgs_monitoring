@@ -251,6 +251,14 @@ def main(**args):
                 dnanexus_data = sample_files_tagged
 
             else:
+                print(
+                    (
+                        "Removing the pid div, this step can take some time "
+                        "depending on the number of files to process..."
+                    ),
+                    flush=True,
+                )
+
                 new_sample_files = {}
 
                 for sample_id, data in sample_files_tagged.items():
