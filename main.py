@@ -2,7 +2,6 @@ import argparse
 import datetime
 import logging
 from pathlib import Path
-import re
 import sys
 
 import dxpy
@@ -118,8 +117,8 @@ def main(**args):
 
             # handle file detection
             else:
-                new_files = utils.find_files_in_clingen_input_location(
-                    config_data["clingen_input_location"]
+                new_files = utils.find_input_files_in_clingen_input_location(
+                    config_data["clingen_input_location"], patterns
                 )
 
         if new_files:
@@ -151,10 +150,16 @@ def main(**args):
                     message += f"  - {file.name}\n"
 
             base_log.info(
-                f"Detected the following files for processing:\n{message}"
+                (
+                    f"Detected {len(sample_files)} sample(s) with the following "
+                    f"files for processing:\n{message}"
+                )
             )
             print(
-                f"Detected the following files for processing:\n{message}",
+                (
+                    f"Detected {len(sample_files)} sample(s) with the following "
+                    f"files for processing:\n{message}"
+                ),
                 flush=True,
             )
 
@@ -222,6 +227,11 @@ def main(**args):
                                 "date": date,
                             },
                         )
+                        base_log.info(f"Updated data for {sample_id} in db")
+                        print(
+                            f"Updated data for {sample_id} in db",
+                            flush=True,
+                        )
                     else:
                         sample_data = db.prepare_data_for_import(
                             sc_wgs_table,
@@ -234,60 +244,103 @@ def main(**args):
                         db_data.append(sample_data)
 
                 db.insert_in_db(session, sc_wgs_table, db_data)
+                base_log.info(f"Inserted new {len(db_data)} sample(s) in db")
+                print(f"Inserted {len(db_data)} sample(s) in db", flush=True)
 
                 # rename the variable in order to standadize naming afterward
                 dnanexus_data = sample_files_tagged
 
             else:
-                # remove the pid div only on unprocessed samples
-                sample_files_tagged = {
-                    sample_id: [
-                        (
-                            (
-                                file,
-                                (
-                                    utils.remove_pid_div_from_supplementary_file(
-                                        file,
-                                        config_data["pid_div_id"],
-                                    )
-                                ),
-                            )
-                            if file.name.endswith(".supplementary.html")
-                            else file
-                        )
-                        for file in data["files"]
-                    ]
-                    for sample_id, data in sample_files_tagged.items()
-                    if data["processed"] is False or args["local_files"]
-                }
+                print(
+                    (
+                        "Removing pid divs, this step can take some time "
+                        "depending on the number of files to process..."
+                    ),
+                    flush=True,
+                )
 
-                for sample_id in sample_files_tagged:
-                    # prepare the import the unprocessed data in the database
-                    sample_data = db.prepare_data_for_import(
-                        sc_wgs_table,
-                        **{
-                            "referral_id": sample_id,
-                            "date": date,
-                            "processing_status": "Preprocessing before job start",
-                        },
-                    )
-                    db_data.append(sample_data)
+                new_sample_files = {}
+
+                for sample_id, data in sample_files_tagged.items():
+                    files = []
+                    new_sample_files[sample_id] = data
+
+                    for file in data["files"]:
+                        # remove the pid div only on unprocessed samples or if
+                        # local files are specified
+                        if args["local_files"] or data["processed"] is False:
+                            if file.name.endswith(".supplementary.html"):
+                                files.append(
+                                    (
+                                        file,
+                                        (
+                                            utils.remove_pid_div_from_supplementary_file(
+                                                file,
+                                                config_data["pid_div_id"],
+                                            )
+                                        ),
+                                    )
+                                )
+                            else:
+                                files.append(file)
+
+                    if files:
+                        new_sample_files[sample_id]["files"] = files
+
+                sample_files_tagged = new_sample_files
+
+                for sample_id, data in sample_files_tagged.items():
+                    if data["processed"] is False:
+                        # prepare the import the unprocessed data in the
+                        # database
+                        sample_data = db.prepare_data_for_import(
+                            sc_wgs_table,
+                            **{
+                                "referral_id": sample_id,
+                                "date": date,
+                                "processing_status": "Preprocessing before job start",
+                            },
+                        )
+                        db_data.append(sample_data)
+                    else:
+                        if args["local_files"]:
+                            db.update_in_db(
+                                session,
+                                sc_wgs_table,
+                                sample_id,
+                                {
+                                    "processing_status": "Preprocessing before job start",
+                                    "date": date,
+                                },
+                            )
+                            base_log.info(
+                                f"Updated data for {sample_id} in db"
+                            )
+                            print(
+                                f"Updated data for {sample_id} in db",
+                                flush=True,
+                            )
 
                 if db_data:
                     db.insert_in_db(session, sc_wgs_table, db_data)
 
-                    base_log.info("Inserted data in db")
-                    print("Inserted data in db", flush=True)
-                else:
-                    base_log.warning("Data couldn't be imported")
-                    print("Data couldn't be imported", flush=True)
-                    sys.exit()
+                    base_log.info(
+                        f"Inserted new {len(db_data)} sample(s) in db"
+                    )
+                    print(
+                        f"Inserted {len(db_data)} sample(s) in db", flush=True
+                    )
 
                 dnanexus_data = dnanexus.upload_input_files(
                     date, sd_wgs_project, sample_files_tagged
                 )
-                base_log.info("Uploaded the files to DNAnexus")
-                print("Uploaded the files to DNAnexus", flush=True)
+                base_log.info(
+                    f"Uploaded {len(dnanexus_data.values())} file(s) to DNAnexus"
+                )
+                print(
+                    f"Uploaded {len(dnanexus_data.values())} file(s) to DNAnexus",
+                    flush=True,
+                )
 
             args_for_starting_jobs = []
 
@@ -304,7 +357,7 @@ def main(**args):
                     )
                 )
 
-            jobs, errors = utils.start_parallel_workbook_jobs(
+            sample_jobs, errors = utils.start_parallel_workbook_jobs(
                 session, sc_wgs_table, args_for_starting_jobs
             )
 
@@ -315,15 +368,51 @@ def main(**args):
                     slack_token,
                 )
 
-            base_log.info("Jobs started, starting job monitoring...")
-            print("Jobs started, starting job monitoring...", flush=True)
+            base_log.info(
+                f"{len(sample_jobs)} job(s) started, starting job monitoring..."
+            )
+            print(
+                f"{len(sample_jobs)} job(s) started, starting job monitoring...",
+                flush=True,
+            )
 
             job_failures = utils.monitor_jobs(
-                session,
-                sc_wgs_table,
-                jobs,
-                config_data["clingen_download_location"],
+                session, sc_wgs_table, sample_jobs.values()
             )
+
+            # prepare the download of the output of the workbook
+            for sample_id, job_id in sample_jobs.items():
+                job = dxpy.DXJob(job_id)
+                download_folder = utils.create_output_folder(
+                    sample_id, config_data["clingen_download_location"]
+                )
+
+                # download the file to clingen and update db with the
+                # location
+                if job.state == "done":
+                    utils.download_file_and_update_db(
+                        session,
+                        sc_wgs_table,
+                        sample_id,
+                        download_folder,
+                        job,
+                    )
+                    base_log.info(
+                        f"Output files for {sample_id} have been downloaded"
+                    )
+
+                    # move the input files only if they are not dnanexus files
+                    if not args["dnanexus_ids"]:
+                        utils.move_files(
+                            download_folder,
+                            *sample_files_tagged[sample_id]["files"],
+                        )
+                        base_log.info(
+                            (
+                                f"Input files for {sample_id} have been moved "
+                                "to output location"
+                            )
+                        )
 
             if job_failures:
                 notifications.slack_notify(
