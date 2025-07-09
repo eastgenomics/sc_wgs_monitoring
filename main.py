@@ -151,13 +151,13 @@ def main(**args):
 
             base_log.info(
                 (
-                    f"Detected {len(sample_files)} samples with the following "
+                    f"Detected {len(sample_files)} sample(s) with the following "
                     f"files for processing:\n{message}"
                 )
             )
             print(
                 (
-                    f"Detected {len(sample_files)} samples with the following "
+                    f"Detected {len(sample_files)} sample(s) with the following "
                     f"files for processing:\n{message}"
                 ),
                 flush=True,
@@ -244,8 +244,8 @@ def main(**args):
                         db_data.append(sample_data)
 
                 db.insert_in_db(session, sc_wgs_table, db_data)
-                base_log.info(f"Inserted new {len(db_data)} samples in db")
-                print(f"Inserted {len(db_data)} samples in db", flush=True)
+                base_log.info(f"Inserted new {len(db_data)} sample(s) in db")
+                print(f"Inserted {len(db_data)} sample(s) in db", flush=True)
 
                 # rename the variable in order to standadize naming afterward
                 dnanexus_data = sample_files_tagged
@@ -316,17 +316,21 @@ def main(**args):
                 if db_data:
                     db.insert_in_db(session, sc_wgs_table, db_data)
 
-                    base_log.info(f"Inserted new {len(db_data)} samples in db")
-                    print(f"Inserted {len(db_data)} samples in db", flush=True)
+                    base_log.info(
+                        f"Inserted new {len(db_data)} sample(s) in db"
+                    )
+                    print(
+                        f"Inserted {len(db_data)} sample(s) in db", flush=True
+                    )
 
                 dnanexus_data = dnanexus.upload_input_files(
                     date, sd_wgs_project, sample_files_tagged
                 )
                 base_log.info(
-                    f"Uploaded {len(dnanexus_data.values())} files to DNAnexus"
+                    f"Uploaded {len(dnanexus_data.values())} file(s) to DNAnexus"
                 )
                 print(
-                    f"Uploaded {len(dnanexus_data.values())} files to DNAnexus",
+                    f"Uploaded {len(dnanexus_data.values())} file(s) to DNAnexus",
                     flush=True,
                 )
 
@@ -357,10 +361,10 @@ def main(**args):
                 )
 
             base_log.info(
-                f"{len(sample_jobs)} jobs started, starting job monitoring..."
+                f"{len(sample_jobs)} job(s) started, starting job monitoring..."
             )
             print(
-                f"{len(sample_jobs)} jobs started, starting job monitoring...",
+                f"{len(sample_jobs)} job(s) started, starting job monitoring...",
                 flush=True,
             )
 
@@ -389,17 +393,18 @@ def main(**args):
                         f"Output files for {sample_id} have been downloaded"
                     )
 
-                # move the input files only if they are not dnanexus files
-                if not args["dnanexus_ids"]:
-                    utils.move_files(
-                        download_folder, *sample_files_tagged[sample_id]
-                    )
-                    base_log.info(
-                        (
-                            f"Input files for {sample_id} have been moved to "
-                            "output location"
+                    # move the input files only if they are not dnanexus files
+                    if not args["dnanexus_ids"]:
+                        utils.move_files(
+                            download_folder,
+                            *sample_files_tagged[sample_id]["files"],
                         )
-                    )
+                        base_log.info(
+                            (
+                                f"Input files for {sample_id} have been moved "
+                                "to output location"
+                            )
+                        )
 
             if job_failures:
                 notifications.slack_notify(
