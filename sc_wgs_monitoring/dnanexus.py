@@ -42,17 +42,17 @@ def upload_input_files(
         Dict of samples and their files in dnanexus and their location
     """
 
-    data = {}
+    data_to_return = {}
 
-    for sample, files in sample_files.items():
+    for sample, data in sample_files.items():
         folder = f"/{date}/{sample}"
-        data.setdefault(sample, {})
+        data_to_return.setdefault(sample, {})
         dxpy.api.project_new_folder(
             project.id, input_params={"folder": folder, "parents": True}
         )
-        data[sample]["folder"] = folder
+        data_to_return[sample]["folder"] = folder
 
-        for file in files:
+        for file in data["files"]:
             if type(file) is PosixPath:
                 dxfile = dxpy.upload_local_file(
                     file, project=project.id, folder=folder
@@ -71,9 +71,9 @@ def upload_input_files(
                 # stupid dnanexus close() is useless, describe() is superior
                 dxfile.describe()
 
-            data[sample].setdefault("files", []).append(dxfile)
+            data_to_return[sample].setdefault("files", []).append(dxfile)
 
-    return data
+    return data_to_return
 
 
 def get_output_id(execution: Dict) -> str:
