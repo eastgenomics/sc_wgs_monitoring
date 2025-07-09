@@ -253,7 +253,7 @@ def main(**args):
             else:
                 print(
                     (
-                        "Removing the pid div, this step can take some time "
+                        "Removing pid divs, this step can take some time "
                         "depending on the number of files to process..."
                     ),
                     flush=True,
