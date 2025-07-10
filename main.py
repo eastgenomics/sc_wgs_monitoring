@@ -487,6 +487,10 @@ def main(**args):
                     session, sc_wgs_table, sample_id
                 )
 
+                download_folder = utils.create_output_folder(
+                    sample_id, config_data["clingen_download_location"]
+                )
+
                 if is_in_db is None:
                     sample_data = db.prepare_data_for_import(
                         sc_wgs_table,
@@ -519,7 +523,7 @@ def main(**args):
                         session,
                         sc_wgs_table,
                         sample_id,
-                        config_data["clingen_download_location"],
+                        download_folder,
                         job,
                     )
                     base_log.info(f"Downloaded {sample_id} workbook")
