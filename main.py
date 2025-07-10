@@ -251,44 +251,6 @@ def main(**args):
                 dnanexus_data = sample_files_tagged
 
             else:
-                print(
-                    (
-                        "Removing pid divs, this step can take some time "
-                        "depending on the number of files to process..."
-                    ),
-                    flush=True,
-                )
-
-                new_sample_files = {}
-
-                for sample_id, data in sample_files_tagged.items():
-                    files = []
-                    new_sample_files[sample_id] = data
-
-                    for file in data["files"]:
-                        # remove the pid div only on unprocessed samples or if
-                        # local files are specified
-                        if args["local_files"] or data["processed"] is False:
-                            if file.name.endswith(".supplementary.html"):
-                                files.append(
-                                    (
-                                        file,
-                                        (
-                                            utils.remove_pid_div_from_supplementary_file(
-                                                file,
-                                                config_data["pid_div_id"],
-                                            )
-                                        ),
-                                    )
-                                )
-                            else:
-                                files.append(file)
-
-                    if files:
-                        new_sample_files[sample_id]["files"] = files
-
-                sample_files_tagged = new_sample_files
-
                 for sample_id, data in sample_files_tagged.items():
                     if data["processed"] is False:
                         # prepare the import the unprocessed data in the
@@ -330,6 +292,44 @@ def main(**args):
                     print(
                         f"Inserted {len(db_data)} sample(s) in db", flush=True
                     )
+
+                print(
+                    (
+                        "Removing pid divs, this step can take some time "
+                        "depending on the number of files to process..."
+                    ),
+                    flush=True,
+                )
+
+                new_sample_files = {}
+
+                for sample_id, data in sample_files_tagged.items():
+                    files = []
+                    new_sample_files[sample_id] = data
+
+                    for file in data["files"]:
+                        # remove the pid div only on unprocessed samples or if
+                        # local files are specified
+                        if args["local_files"] or data["processed"] is False:
+                            if file.name.endswith(".supplementary.html"):
+                                files.append(
+                                    (
+                                        file,
+                                        (
+                                            utils.remove_pid_div_from_supplementary_file(
+                                                file,
+                                                config_data["pid_div_id"],
+                                            )
+                                        ),
+                                    )
+                                )
+                            else:
+                                files.append(file)
+
+                    if files:
+                        new_sample_files[sample_id]["files"] = files
+
+                sample_files_tagged = new_sample_files
 
                 dnanexus_data = dnanexus.upload_input_files(
                     date, sd_wgs_project, sample_files_tagged
