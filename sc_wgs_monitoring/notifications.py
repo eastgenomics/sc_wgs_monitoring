@@ -55,7 +55,11 @@ def build_report(jobs_dict: dict, date: str) -> str:
         String representing the report message to send to Slack
     """
 
-    status_dict = {"done": ":white_check_mark:", "failed": ":warning:"}
+    status_dict = {
+        "done": ":white_check_mark:",
+        "failed": ":warning:",
+        "terminated": ":skull:",
+    }
 
     report = f":excel: Solid Cancer WGS workbooks | Jobs for {date}:\n"
 

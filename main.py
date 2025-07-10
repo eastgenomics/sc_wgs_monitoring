@@ -243,52 +243,19 @@ def main(**args):
                         )
                         db_data.append(sample_data)
 
-                db.insert_in_db(session, sc_wgs_table, db_data)
-                base_log.info(f"Inserted new {len(db_data)} sample(s) in db")
-                print(f"Inserted {len(db_data)} sample(s) in db", flush=True)
+                if db_data:
+                    db.insert_in_db(session, sc_wgs_table, db_data)
+                    base_log.info(
+                        f"Inserted new {len(db_data)} sample(s) in db"
+                    )
+                    print(
+                        f"Inserted {len(db_data)} sample(s) in db", flush=True
+                    )
 
                 # rename the variable in order to standadize naming afterward
                 dnanexus_data = sample_files_tagged
 
             else:
-                print(
-                    (
-                        "Removing pid divs, this step can take some time "
-                        "depending on the number of files to process..."
-                    ),
-                    flush=True,
-                )
-
-                new_sample_files = {}
-
-                for sample_id, data in sample_files_tagged.items():
-                    files = []
-                    new_sample_files[sample_id] = data
-
-                    for file in data["files"]:
-                        # remove the pid div only on unprocessed samples or if
-                        # local files are specified
-                        if args["local_files"] or data["processed"] is False:
-                            if file.name.endswith(".supplementary.html"):
-                                files.append(
-                                    (
-                                        file,
-                                        (
-                                            utils.remove_pid_div_from_supplementary_file(
-                                                file,
-                                                config_data["pid_div_id"],
-                                            )
-                                        ),
-                                    )
-                                )
-                            else:
-                                files.append(file)
-
-                    if files:
-                        new_sample_files[sample_id]["files"] = files
-
-                sample_files_tagged = new_sample_files
-
                 for sample_id, data in sample_files_tagged.items():
                     if data["processed"] is False:
                         # prepare the import the unprocessed data in the
@@ -330,6 +297,44 @@ def main(**args):
                     print(
                         f"Inserted {len(db_data)} sample(s) in db", flush=True
                     )
+
+                print(
+                    (
+                        "Removing pid divs, this step can take some time "
+                        "depending on the number of files to process..."
+                    ),
+                    flush=True,
+                )
+
+                new_sample_files = {}
+
+                for sample_id, data in sample_files_tagged.items():
+                    files = []
+                    new_sample_files[sample_id] = data
+
+                    for file in data["files"]:
+                        # remove the pid div only on unprocessed samples or if
+                        # local files are specified
+                        if args["local_files"] or data["processed"] is False:
+                            if file.name.endswith(".supplementary.html"):
+                                files.append(
+                                    (
+                                        file,
+                                        (
+                                            utils.remove_pid_div_from_supplementary_file(
+                                                file,
+                                                config_data["pid_div_id"],
+                                            )
+                                        ),
+                                    )
+                                )
+                            else:
+                                files.append(file)
+
+                    if files:
+                        new_sample_files[sample_id]["files"] = files
+
+                sample_files_tagged = new_sample_files
 
                 dnanexus_data = dnanexus.upload_input_files(
                     date, sd_wgs_project, sample_files_tagged
@@ -471,9 +476,7 @@ def main(**args):
             for execution in executions:
                 job = dxpy.DXJob(execution["id"])
                 supplementary_html_file = dxpy.DXFile(
-                    execution["runInput"]["supplementary_html"][
-                        "$dnanexus_link"
-                    ]
+                    job.runInput["supplementary_html"]["$dnanexus_link"]
                 )
                 sample_id = supplementary_html_file.name.split(".")[0]
 
@@ -482,6 +485,10 @@ def main(**args):
 
                 is_in_db = db.look_for_processed_samples(
                     session, sc_wgs_table, sample_id
+                )
+
+                download_folder = utils.create_output_folder(
+                    sample_id, config_data["clingen_download_location"]
                 )
 
                 if is_in_db is None:
@@ -516,7 +523,7 @@ def main(**args):
                         session,
                         sc_wgs_table,
                         sample_id,
-                        config_data["clingen_download_location"],
+                        download_folder,
                         job,
                     )
                     base_log.info(f"Downloaded {sample_id} workbook")

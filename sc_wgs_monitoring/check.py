@@ -87,7 +87,13 @@ def check_if_job_is_done(job_id: str) -> bool:
         # have to redefine the job object to update the job state
         job = dxpy.DXJob(job_id)
 
-        if job.state not in ["runnable", "running", "idle"]:
+        if job.state not in [
+            "runnable",
+            "running",
+            "idle",
+            "waiting_on_input",
+            "waiting_on_output",
+        ]:
             return True
         else:
             # if it's been more than 1h
