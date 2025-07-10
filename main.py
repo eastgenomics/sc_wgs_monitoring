@@ -243,9 +243,14 @@ def main(**args):
                         )
                         db_data.append(sample_data)
 
-                db.insert_in_db(session, sc_wgs_table, db_data)
-                base_log.info(f"Inserted new {len(db_data)} sample(s) in db")
-                print(f"Inserted {len(db_data)} sample(s) in db", flush=True)
+                if db_data:
+                    db.insert_in_db(session, sc_wgs_table, db_data)
+                    base_log.info(
+                        f"Inserted new {len(db_data)} sample(s) in db"
+                    )
+                    print(
+                        f"Inserted {len(db_data)} sample(s) in db", flush=True
+                    )
 
                 # rename the variable in order to standadize naming afterward
                 dnanexus_data = sample_files_tagged
