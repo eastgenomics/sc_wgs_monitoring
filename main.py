@@ -476,9 +476,7 @@ def main(**args):
             for execution in executions:
                 job = dxpy.DXJob(execution["id"])
                 supplementary_html_file = dxpy.DXFile(
-                    execution["runInput"]["supplementary_html"][
-                        "$dnanexus_link"
-                    ]
+                    job["runInput"]["supplementary_html"]["$dnanexus_link"]
                 )
                 sample_id = supplementary_html_file.name.split(".")[0]
 
