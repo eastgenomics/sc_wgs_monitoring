@@ -121,21 +121,43 @@ def get_sample_id_from_files(files: list, patterns: list) -> Dict:
             if sample_id in file.name:
                 file_dict[sample_id].append(file)
 
-    assertion = []
-
-    for sample_id, sample_files in file_dict.items():
-        if len(sample_files) != 3:
-            assertion.append((sample_id, sample_files))
-
-    if assertion:
-        msg = ""
-
-        for sample_id, files in assertion:
-            msg += f"- {sample_id} doesn't have 3 files associated: {files}\n"
-
-        raise AssertionError(msg)
-
     return file_dict
+
+
+def remove_samples(
+    sample_files: dict, samples_to_remove: list, incorrect_file_names: list
+) -> Dict:
+    """Remove samples from the sample id to files dict
+
+    Parameters
+    ----------
+    sample_files : dict
+        Dict containing the sample ids and their associated files
+    samples_to_remove : list
+        List of samples to be removed due to an incomplete set of files
+    incorrect_file_names : list
+        List of file names detected to have the wrong pattern
+
+    Returns
+    -------
+    Dict
+        Filtered dict without sample ids with issues
+    """
+
+    data = {}
+    samples_with_incorrect_file_names = []
+
+    for sample, files in sample_files.items():
+        for file in files:
+            if file in incorrect_file_names:
+                samples_with_incorrect_file_names.append(sample)
+
+    # remove sample entries from the incorrect file names list and the
+    # incomplete sets list
+    for sample in samples_with_incorrect_file_names + samples_to_remove:
+        del data[sample]
+
+    return data, samples_with_incorrect_file_names
 
 
 def remove_pid_div_from_supplementary_file(
