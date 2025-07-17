@@ -151,11 +151,13 @@ def remove_samples(
         for file in files:
             if file in incorrect_file_names:
                 samples_with_incorrect_file_names.append(sample)
+                break
 
     # remove sample entries from the incorrect file names list and the
     # incomplete sets list
-    for sample in samples_with_incorrect_file_names + samples_to_remove:
-        del data[sample]
+    for sample, files in sample_files.items():
+        if sample not in samples_with_incorrect_file_names + samples_to_remove:
+            data[sample] = files
 
     return data, samples_with_incorrect_file_names
 
