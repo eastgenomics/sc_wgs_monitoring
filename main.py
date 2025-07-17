@@ -151,19 +151,25 @@ def main(**args):
                 base_log.error(msg)
 
             samples_with_incomplete_sets = [
-                sample for sample, files in sample_files if len(files) != 3
+                (sample, files)
+                for sample, files in sample_files.items()
+                if len(files) != 3
             ]
 
             if len(samples_with_incomplete_sets) != 0:
                 msg = "The following samples do not have 3 files:\n"
 
                 for sample, files in samples_with_incomplete_sets:
-                    msg += f" - {sample}\n"
+                    msg += f"- {sample}\n"
 
                     for file in files:
-                        msg += f"   - {file}\n"
+                        msg += f"  - {file}\n"
 
                 base_log.error(msg.rstrip("\n"))
+
+                samples_with_incomplete_sets = [
+                    sample for sample, files in samples_with_incomplete_sets
+                ]
 
             sample_files, removed_samples = utils.remove_samples(
                 sample_files,
