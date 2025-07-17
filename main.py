@@ -79,7 +79,7 @@ def main(**args):
         patterns = {
             r"[-_]reported_structural_variants\..*\.csv": "reported_structural_variants",
             r"[-_]reported_variants\..*\.csv": "reported_variants",
-            r"\..*\.supplementary\.html": "supplementary_html",
+            r"\..*\.supplementary.*\.html": "supplementary_html",
         }
 
         # handle given dnanexus ids
