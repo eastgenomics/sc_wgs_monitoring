@@ -69,9 +69,9 @@ def main(**args):
     print(header_msg.replace("\n", "").replace(":excel:", ""), flush=True)
 
     if not args["start_jobs"] and not args["download_job_output"]:
-        raise AssertionError(
-            "No processing type specified, please use -s or -j"
-        )
+        msg = "No processing type specified, please use -s or -j"
+        base_log.error(msg)
+        raise AssertionError(msg)
 
     # start WGS workbook jobs
     if args["start_jobs"]:
@@ -94,10 +94,12 @@ def main(**args):
                     dxpy.DXFile(file) for file in args["dnanexus_ids"]
                 ]
             else:
-                raise AssertionError(
+                msg = (
                     f"Provided files {args['dnanexus_ids']} are not all "
                     "DNAnexus file ids"
                 )
+                base_log.error(msg)
+                raise AssertionError(msg)
 
         else:
             # handle specified local files to process
@@ -108,10 +110,12 @@ def main(**args):
                         for file in args["local_files"]
                     ]
                 ):
-                    raise AssertionError(
+                    msg = (
                         "One of the files given doesn't exist "
                         f"{'|'.join([file for file in args["local_files"]])}"
                     )
+                    base_log.error(msg)
+                    raise AssertionError(msg)
 
                 new_files = [Path(file) for file in args["local_files"]]
 
@@ -122,23 +126,76 @@ def main(**args):
                 )
 
         if new_files:
+            # group files per id
+            sample_files = utils.get_sample_id_from_files(new_files, patterns)
+
             # check if the files have expected suffixes
-            if not all(
-                check.check_file_input_name_is_correct(file.name, patterns)
+            files_with_incorrect_file_name = [
+                file.name
                 for file in new_files
-            ):
-                raise AssertionError(
+                if not check.check_file_input_name_is_correct(
+                    file.name, patterns
+                )
+            ]
+
+            if len(files_with_incorrect_file_name) != 0:
+                msg = (
                     "The set of provided files is not correct. Expected files "
                     f"with the following patterns: {[
                         r'[-_]reported_structural_variants\..*\.csv',
                         r'[-_]reported_variants\..*\.csv',
                         r'\..*\.supplementary\.html',
                     ]}. "
-                    f"Got {" | ".join([file.name for file in new_files])}"
+                    f"Got {" | ".join([file for file in files_with_incorrect_file_name])}"
+                )
+                base_log.error(msg)
+
+            samples_with_incomplete_sets = [
+                (sample, files)
+                for sample, files in sample_files.items()
+                if len(files) != 3
+            ]
+
+            if len(samples_with_incomplete_sets) != 0:
+                msg = "The following samples do not have 3 files:\n"
+
+                for sample, files in samples_with_incomplete_sets:
+                    msg += f"- {sample}\n"
+
+                    for file in files:
+                        msg += f"  - {file}\n"
+
+                base_log.error(msg.rstrip("\n"))
+
+                samples_with_incomplete_sets = [
+                    sample for sample, files in samples_with_incomplete_sets
+                ]
+
+            sample_files, removed_samples = utils.remove_samples(
+                sample_files,
+                samples_with_incomplete_sets,
+                files_with_incorrect_file_name,
+            )
+
+            if len(sample_files) == 0:
+                msg = (
+                    "No samples are left after removing samples with issues.\n"
                 )
 
-            # group files per id as a sense check
-            sample_files = utils.get_sample_id_from_files(new_files, patterns)
+                if len(files_with_incorrect_file_name) != 0:
+                    msg += (
+                        "Removed samples due wrong file name: "
+                        f"{' | '.join(removed_samples)}\n"
+                    )
+
+                if len(samples_with_incomplete_sets) != 0:
+                    msg += (
+                        "Removed samples due to incomplete set of files: "
+                        f"{' | '.join(samples_with_incomplete_sets)}\n"
+                    )
+
+                base_log.error(msg)
+                raise AssertionError(msg)
 
             message = ""
 

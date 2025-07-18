@@ -6,7 +6,6 @@ services:
       context: .
       dockerfile: monitoring_db.Dockerfile
     image: sc_wgs_monitoring_db:1.0.0
-    # restart: always
     volumes:
       - db:/var/lib/postgresql/data/
     environment:
@@ -20,24 +19,9 @@ services:
     build:
       context: .
       dockerfile: monitoring_app.Dockerfile
-    image: sc_wgs_monitoring:1.0.0
-    tty: true
-    # restart: always
-    environment:
-      - DNANEXUS_TOKEN
-      - DB_NAME
-      - DB_USER
-      - DB_PASSWORD
-      - HOST
-      - SLACK_TOKEN
-      - SLACK_LOG_CHANNEL
-      - SLACK_ALERT_CHANNEL
-      - DEBUG
-      - VERSION
+    image: sc_wgs_monitoring:1.0.1
     expose:
       - 8010
-    volumes:
-      - /var/log/monitoring:/app/sc_wgs_monitoring/grafana
     depends_on:
       - db
 
@@ -45,7 +29,6 @@ services:
   nginx:
     container_name: sc_wgs_monitoring_proxy
     image: nginx:1.23
-    # restart: always
     ports:
       - 8012:80
     volumes:
@@ -66,4 +49,4 @@ networks:
 
 volumes:
   db:
-    name: db
+    name: sc_wgs_db
