@@ -1,4 +1,4 @@
-# sd_wgs_monitoring
+# sc_wgs_monitoring
 
 Solid cancer WGS repository to monitor new files and new outputs from WGS workbooks jobs
 
@@ -15,25 +15,25 @@ The necessary inputs are:
     - `-ids` can be used to specify job ids to check.
 
 ```sh
-# basic command
-docker run --rm --env-file ${environment_config_file} --network ${name_of_the_network_in_docker-compose} --mount type=bind,src=${local_path_where_inputs_are_located},dst=/app/sc_wgs_monitoring/inputs --mount type=bind,src=${local_path_to_download_workbooks_to},dst=/app/sc_wgs_monitoring/output ${image_id} sh -c 'python3 /app/sc_wgs_monitoring/main.py ...'
+# base command
+docker run --rm --env-file ${environment_config_file} --network ${name_of_the_network_in_docker-compose} -v ${local_path_where_inputs_are_located}:/app/sc_wgs_monitoring/inputs -v ${local_path_to_download_workbooks_to}:/app/sc_wgs_monitoring/output -v ${local_path_to_logs}:/app/sc_wgs_monitoring/logs/ ${image_name}:${image_version} sh -c 'python3 /app/sc_wgs_monitoring/main.py ...'
 
 # start workbook jobs from files detected in the config location
-docker run --rm --env-file ${environment_config_file} --network ${name_of_the_network_in_docker-compose} --mount type=bind,src=${local_path_where_inputs_are_located},dst=/app/sc_wgs_monitoring/inputs --mount type=bind,src=${local_path_to_download_workbooks_to},dst=/app/sc_wgs_monitoring/output ${image_id} sh -c 'python3 /app/sc_wgs_monitoring/main.py -s'
+docker run --rm --env-file ${environment_config_file} --network ${name_of_the_network_in_docker-compose} -v ${local_path_where_inputs_are_located}:/app/sc_wgs_monitoring/inputs -v ${local_path_to_download_workbooks_to}:/app/sc_wgs_monitoring/output -v ${local_path_to_logs}:/app/sc_wgs_monitoring/logs/ ${image_name}:${image_version} sh -c 'python3 /app/sc_wgs_monitoring/main.py -s'
 # start workbook jobs from dnanexus files
-docker run --rm --env-file ${environment_config_file} --network ${name_of_the_network_in_docker-compose} --mount type=bind,src=${local_path_where_inputs_are_located},dst=/app/sc_wgs_monitoring/inputs --mount type=bind,src=${local_path_to_download_workbooks_to},dst=/app/sc_wgs_monitoring/output ${image_id} sh -c 'python3 /app/sc_wgs_monitoring/main.py -s -ids ${file_id} ${file_id} ${file_id}'
+docker run --rm --env-file ${environment_config_file} --network ${name_of_the_network_in_docker-compose} -v ${local_path_where_inputs_are_located}:/app/sc_wgs_monitoring/inputs -v ${local_path_to_download_workbooks_to}:/app/sc_wgs_monitoring/output -v ${local_path_to_logs}:/app/sc_wgs_monitoring/logs/ ${image_name}:${image_version} sh -c 'python3 /app/sc_wgs_monitoring/main.py -s -ids ${file_id} ${file_id} ${file_id}'
 # start workbook jobs from local files
-docker run --rm --env-file ${environment_config_file} --network ${name_of_the_network_in_docker-compose} --mount type=bind,src=${local_path_where_inputs_are_located},dst=/app/sc_wgs_monitoring/inputs --mount type=bind,src=${local_path_to_download_workbooks_to},dst=/app/sc_wgs_monitoring/output ${image_id} sh -c 'python3 /app/sc_wgs_monitoring/main.py -s -l ${file} ${file} ${file}'
+docker run --rm --env-file ${environment_config_file} --network ${name_of_the_network_in_docker-compose} -v ${local_path_where_inputs_are_located}:/app/sc_wgs_monitoring/inputs -v ${local_path_to_download_workbooks_to}:/app/sc_wgs_monitoring/output -v ${local_path_to_logs}:/app/sc_wgs_monitoring/logs/ ${image_name}:${image_version} sh -c 'python3 /app/sc_wgs_monitoring/main.py -s -l ${file} ${file} ${file}'
 # override config file using individual config key
-docker run --rm --env-file ${environment_config_file} --network ${name_of_the_network_in_docker-compose} --mount type=bind,src=${local_path_where_inputs_are_located},dst=/app/sc_wgs_monitoring/inputs --mount type=bind,src=${local_path_to_download_workbooks_to},dst=/app/sc_wgs_monitoring/output ${image_id} sh -c 'python3 /app/sc_wgs_monitoring/main.py -s config_override -project_id project-xxxxxxxxxxxxxxxxxxxxxxxx'
+docker run --rm --env-file ${environment_config_file} --network ${name_of_the_network_in_docker-compose} -v ${local_path_where_inputs_are_located}:/app/sc_wgs_monitoring/inputs -v ${local_path_to_download_workbooks_to}:/app/sc_wgs_monitoring/output -v ${local_path_to_logs}:/app/sc_wgs_monitoring/logs/ ${image_name}:${image_version} sh -c 'python3 /app/sc_wgs_monitoring/main.py -s config_override -project_id project-xxxxxxxxxxxxxxxxxxxxxxxx'
 # override config file using new config file
-docker run --rm --env-file ${environment_config_file} --network ${name_of_the_network_in_docker-compose} --mount type=bind,src=${local_path_where_inputs_are_located},dst=/app/sc_wgs_monitoring/inputs --mount type=bind,src=${local_path_to_download_workbooks_to},dst=/app/sc_wgs_monitoring/output ${image_id} sh -c 'python3 /app/sc_wgs_monitoring/main.py -s -c /app/sc_wgs_monitoring/inputs/new_config'
+docker run --rm --env-file ${environment_config_file} --network ${name_of_the_network_in_docker-compose} -v ${local_path_where_inputs_are_located}:/app/sc_wgs_monitoring/inputs -v ${local_path_to_download_workbooks_to}:/app/sc_wgs_monitoring/output -v ${local_path_to_logs}:/app/sc_wgs_monitoring/logs/ ${image_name}:${image_version} sh -c 'python3 /app/sc_wgs_monitoring/main.py -s -c /app/sc_wgs_monitoring/inputs/new_config'
 
 
 # check for jobs finished in the last hour
-docker run --rm --env-file ${environment_config_file} --network ${name_of_the_network_in_docker-compose} --mount type=bind,src=${local_path_where_inputs_are_located},dst=/app/sc_wgs_monitoring/inputs --mount type=bind,src=${local_path_to_download_workbooks_to},dst=/app/sc_wgs_monitoring/output ${image_id} sh -c 'python3 /app/sc_wgs_monitoring/main.py -j -t 1h'
+docker run --rm --env-file ${environment_config_file} --network ${name_of_the_network_in_docker-compose} -v ${local_path_where_inputs_are_located}:/app/sc_wgs_monitoring/inputs -v ${local_path_to_download_workbooks_to}:/app/sc_wgs_monitoring/output -v ${local_path_to_logs}:/app/sc_wgs_monitoring/logs/ ${image_name}:${image_version} sh -c 'python3 /app/sc_wgs_monitoring/main.py -j -t 1h'
 # upload files from the specified jobs
-docker run --rm --env-file ${environment_config_file} --network ${name_of_the_network_in_docker-compose} --mount type=bind,src=${local_path_where_inputs_are_located},dst=/app/sc_wgs_monitoring/inputs --mount type=bind,src=${local_path_to_download_workbooks_to},dst=/app/sc_wgs_monitoring/output ${image_id} sh -c 'python3 /app/sc_wgs_monitoring/main.py -j -ids ${job_id}'
+docker run --rm --env-file ${environment_config_file} --network ${name_of_the_network_in_docker-compose} -v ${local_path_where_inputs_are_located}:/app/sc_wgs_monitoring/inputs -v ${local_path_to_download_workbooks_to}:/app/sc_wgs_monitoring/output -v ${local_path_to_logs}:/app/sc_wgs_monitoring/logs/ ${image_name}:${image_version} sh -c 'python3 /app/sc_wgs_monitoring/main.py -j -ids ${job_id}'
 ```
 
 ## Configs
