@@ -125,6 +125,8 @@ def main(**args):
                     config_data["clingen_input_location"], patterns
                 )
 
+        silent_errors = []
+
         if new_files:
             # group files per id
             sample_files = utils.get_sample_id_from_files(new_files, patterns)
@@ -149,6 +151,7 @@ def main(**args):
                     f"Got {" | ".join([file for file in files_with_incorrect_file_name])}"
                 )
                 base_log.error(msg)
+                silent_errors.append(msg)
 
             samples_with_incomplete_sets = [
                 (sample, files)
@@ -166,6 +169,7 @@ def main(**args):
                         msg += f"  - {file}\n"
 
                 base_log.error(msg.rstrip("\n"))
+                silent_errors.append(msg.rstrip("\n"))
 
                 samples_with_incomplete_sets = [
                     sample for sample, files in samples_with_incomplete_sets
@@ -481,6 +485,16 @@ def main(**args):
                     f"{header_msg + '\n'.join(job_failures)}",
                     slack_alert_channel,
                     slack_token,
+                )
+
+            # if errors were detected for some but not all files, allow the
+            # processing to go through and trigger slack message at the end
+            if silent_errors:
+                raise AssertionError(
+                    (
+                        "Errors were detected for some of the files detected. "
+                        "Please investigate in the logs"
+                    )
                 )
 
         else:
