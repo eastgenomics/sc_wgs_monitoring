@@ -490,7 +490,12 @@ def main(**args):
             # if errors were detected for some but not all files, allow the
             # processing to go through and trigger slack message at the end
             if silent_errors:
-                raise AssertionError()
+                raise AssertionError(
+                    (
+                        "Errors were detected for some of the files detected. "
+                        "Please investigate in the logs"
+                    )
+                )
 
         else:
             base_log.info("Couldn't find any files")
