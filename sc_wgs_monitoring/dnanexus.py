@@ -128,7 +128,7 @@ def prepare_inputs(
     sample: str,
     files: list,
     folder: str,
-    patterns: list,
+    patterns: dict,
     workbook_inputs: dict,
     workbook_app: dxpy.DXApp,
     instance_type: str,
@@ -143,8 +143,8 @@ def prepare_inputs(
         List of files for one job
     folder : str
         Folder output
-    patterns : list
-        List of patterns for assignment to the correct input name
+    patterns : dict
+        Dict of patterns for assignment to the correct input name
     workbook_inputs : dict
         Dict containing reference files
     workbook_app : dxpy.DXApp
