@@ -26,7 +26,7 @@ def check_dnanexus_id(string: str) -> bool:
     )
 
 
-def check_file_input_name_is_correct(string: str, patterns: list) -> bool:
+def check_file_input_name_is_correct(string: str, patterns: dict) -> bool:
     """Check if the given string matches the expected pattern for the input
     for the workbook job
 
@@ -34,7 +34,7 @@ def check_file_input_name_is_correct(string: str, patterns: list) -> bool:
     ----------
     string : str
         String to check
-    patterns : list
+    patterns : dict
         Expected patterns for the file name
 
     Returns

@@ -79,7 +79,7 @@ def load_env_variables() -> tuple:
     )
 
 
-def get_sample_id_from_files(files: list, patterns: list) -> Dict:
+def get_sample_id_from_files(files: list, patterns: dict) -> Dict:
     """Get the sample id from the new files detected and link sample ids to
     their files
 
@@ -87,7 +87,7 @@ def get_sample_id_from_files(files: list, patterns: list) -> Dict:
     ----------
     files : list
         List of DNAnexus file objects
-    patterns : list
+    patterns : dict
         Expected patterns for the file name
 
     Returns
@@ -195,7 +195,7 @@ def remove_pid_div_from_supplementary_file(
 
 
 def find_input_files_in_clingen_input_location(
-    location: str, patterns: list
+    location: str, patterns: dict
 ) -> list:
     """Return all files present in the given location
 
@@ -203,8 +203,8 @@ def find_input_files_in_clingen_input_location(
     ----------
     location : str
         Path in which to look for files
-    patterns : list
-        List of patterns of the expected files
+    patterns : dict
+        Dict of patterns of the expected files
 
     Returns
     -------
@@ -303,13 +303,13 @@ def download_file_and_update_db(
         )
 
 
-def move_files(location: str, *files_to_move) -> None:
+def move_files(location: Path, *files_to_move) -> None:
     """Move list of files to given location
 
     Parameters
     ----------
-    location : str
-        Location in which to move the data in
+    location : Path
+        Path in which to move the data in
     files_to_move : *args
         Iterable of files to move
     """
