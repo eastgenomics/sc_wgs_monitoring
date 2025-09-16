@@ -1,7 +1,7 @@
 services:
   # database containers, one for each db
   db:
-    container_name: sc_wgs_db
+    container_name: sc_wgs_monitoring_db
     build:
       context: .
       dockerfile: monitoring_db.Dockerfile
