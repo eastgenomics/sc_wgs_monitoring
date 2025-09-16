@@ -397,6 +397,7 @@ def main(**args):
                         patterns,
                         config_data["workbook_inputs"],
                         sc_wgs_workbook_app,
+                        config_data["instance_type"],
                     )
                 )
 
@@ -722,6 +723,11 @@ if __name__ == "__main__":
             "Clingen location to download data to (used to override config "
             "data)"
         ),
+    )
+    config_override.add_argument(
+        "-instance_type",
+        "--instance_type",
+        help="Instance type to use for the jobs",
     )
 
     args = vars(parser.parse_args())

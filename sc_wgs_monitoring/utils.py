@@ -358,12 +358,14 @@ def start_parallel_workbook_jobs(
                 app,
                 job_name,
                 output_folder,
+                instance_type,
             ): job_name
             for (
                 inputs,
                 app,
                 job_name,
                 output_folder,
+                instance_type,
             ) in args_for_starting_jobs
         }
 
