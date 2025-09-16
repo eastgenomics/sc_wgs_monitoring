@@ -210,19 +210,13 @@ def main(**args):
                 for file in files:
                     message += f"  - {file.name}\n"
 
-            base_log.info(
-                (
-                    f"Detected {len(sample_files)} sample(s) with the following "
-                    f"files for processing:\n{message}"
-                )
+            msg = (
+                f"Detected {len(sample_files)} sample(s) with the following "
+                f"files for processing:\n{message}"
             )
-            print(
-                (
-                    f"Detected {len(sample_files)} sample(s) with the following "
-                    f"files for processing:\n{message}"
-                ),
-                flush=True,
-            )
+
+            base_log.info(msg)
+            print(msg, flush=True)
 
             sample_files_tagged = db.tag_processed_samples(
                 session, sc_wgs_table, sample_files
@@ -231,13 +225,9 @@ def main(**args):
             if all(
                 [data["processed"] for data in sample_files_tagged.values()]
             ) and (not args["dnanexus_ids"] and not args["local_files"]):
-                base_log.warning(
-                    "All detected samples have already been processed",
-                )
-                print(
-                    "All detected samples have already been processed",
-                    flush=True,
-                )
+                msg = ("All detected samples have already been processed",)
+                base_log.warning(msg)
+                print(msg, flush=True)
                 sys.exit()
 
             processed_samples = [
@@ -247,15 +237,12 @@ def main(**args):
             ]
 
             if processed_samples:
-                base_log.warning(
+                msg = (
                     "The following samples are already in the database:\n - "
-                    f"{"\n - ".join(processed_samples)}\n",
+                    f"{"\n - ".join(processed_samples)}\n"
                 )
-                print(
-                    "The following samples are already in the database:\n - "
-                    f"{"\n - ".join(processed_samples)}\n",
-                    flush=True,
-                )
+                base_log.warning(msg)
+                print(msg, flush=True)
 
             db_data = []
 
@@ -288,11 +275,10 @@ def main(**args):
                                 "date": date,
                             },
                         )
-                        base_log.info(f"Updated data for {sample_id} in db")
-                        print(
-                            f"Updated data for {sample_id} in db",
-                            flush=True,
-                        )
+
+                        msg = f"Updated data for {sample_id} in db"
+                        base_log.info(msg)
+                        print(msg, flush=True)
                     else:
                         sample_data = db.prepare_data_for_import(
                             sc_wgs_table,
@@ -306,12 +292,10 @@ def main(**args):
 
                 if db_data:
                     db.insert_in_db(session, sc_wgs_table, db_data)
-                    base_log.info(
-                        f"Inserted new {len(db_data)} sample(s) in db"
-                    )
-                    print(
-                        f"Inserted {len(db_data)} sample(s) in db", flush=True
-                    )
+
+                    msg = f"Inserted new {len(db_data)} sample(s) in db"
+                    base_log.info(msg)
+                    print(msg, flush=True)
 
                 # rename the variable in order to standadize naming afterward
                 dnanexus_data = sample_files_tagged
@@ -341,31 +325,24 @@ def main(**args):
                                     "date": date,
                                 },
                             )
-                            base_log.info(
-                                f"Updated data for {sample_id} in db"
-                            )
-                            print(
-                                f"Updated data for {sample_id} in db",
-                                flush=True,
-                            )
+
+                            msg = f"Updated data for {sample_id} in db"
+                            base_log.info(msg)
+                            print(msg, flush=True)
 
                 if db_data:
                     db.insert_in_db(session, sc_wgs_table, db_data)
 
-                    base_log.info(
-                        f"Inserted new {len(db_data)} sample(s) in db"
-                    )
-                    print(
-                        f"Inserted {len(db_data)} sample(s) in db", flush=True
-                    )
+                    msg = f"Inserted new {len(db_data)} sample(s) in db"
+                    base_log.info(msg)
+                    print(msg, flush=True)
 
-                print(
-                    (
-                        "Removing pid divs, this step can take some time "
-                        "depending on the number of files to process..."
-                    ),
-                    flush=True,
+                msg = (
+                    "Removing pid divs, this step can take some time "
+                    "depending on the number of files to process..."
                 )
+                base_log.info(msg)
+                print(msg, flush=True)
 
                 new_sample_files = {}
 
@@ -400,13 +377,13 @@ def main(**args):
                 dnanexus_data = dnanexus.upload_input_files(
                     date, sd_wgs_project, sample_files_tagged
                 )
-                base_log.info(
-                    f"Uploaded {len(dnanexus_data.values())} file(s) to DNAnexus"
+
+                msg = (
+                    f"Uploaded {len(dnanexus_data.values())} file(s) to "
+                    "DNAnexus"
                 )
-                print(
-                    f"Uploaded {len(dnanexus_data.values())} file(s) to DNAnexus",
-                    flush=True,
-                )
+                base_log.info(msg)
+                print(msg, flush=True)
 
             args_for_starting_jobs = []
 
@@ -434,13 +411,12 @@ def main(**args):
                     slack_token,
                 )
 
-            base_log.info(
-                f"{len(sample_jobs)} job(s) started, starting job monitoring..."
+            msg = (
+                f"{len(sample_jobs)} job(s) started, starting job "
+                "monitoring..."
             )
-            print(
-                f"{len(sample_jobs)} job(s) started, starting job monitoring...",
-                flush=True,
-            )
+            base_log.info(msg)
+            print(msg, flush=True)
 
             job_failures = utils.monitor_jobs(
                 session, sc_wgs_table, sample_jobs.values()
@@ -463,9 +439,10 @@ def main(**args):
                         download_folder,
                         job,
                     )
-                    base_log.info(
-                        f"Output files for {sample_id} have been downloaded"
-                    )
+
+                    msg = f"Output files for {sample_id} have been downloaded"
+                    base_log.info(msg)
+                    print(msg, flush=True)
 
                     # move the input files only if they are not dnanexus files
                     if not args["dnanexus_ids"]:
@@ -473,12 +450,13 @@ def main(**args):
                             download_folder,
                             *sample_files_tagged[sample_id]["files"],
                         )
-                        base_log.info(
-                            (
-                                f"Input files for {sample_id} have been moved "
-                                "to output location"
-                            )
+
+                        msg = (
+                            f"Input files for {sample_id} have been moved "
+                            "to output location"
                         )
+                        base_log.info(msg)
+                        print(msg, flush=True)
 
             if job_failures:
                 notifications.slack_notify(
@@ -498,8 +476,9 @@ def main(**args):
                 )
 
         else:
-            base_log.info("Couldn't find any files")
-            print("Couldn't find any files", flush=True)
+            msg = "Couldn't find any files"
+            base_log.info(msg)
+            print(msg, flush=True)
 
     # check jobs that have finished
     if args["download_job_output"]:
@@ -534,15 +513,12 @@ def main(**args):
                     )
                 )
 
-            base_log.info(
+            msg = (
                 "Found the following jobs: "
                 f"{" | ".join([job["id"] for job in executions])}"
             )
-            print(
-                "Found the following jobs: "
-                f"{" | ".join([job["id"] for job in executions])}",
-                flush=True,
-            )
+            base_log.info(msg)
+            print(msg, flush=True)
 
             for execution in executions:
                 job = dxpy.DXJob(execution["id"])
@@ -576,8 +552,10 @@ def main(**args):
                         },
                     )
                     db.insert_in_db(session, sc_wgs_table, [sample_data])
-                    base_log.info(f"Inserted {sample_id} data")
-                    print(f"Inserted {sample_id} data", flush=True)
+
+                    msg = f"Inserted {sample_id} data"
+                    base_log.info(msg)
+                    print(msg, flush=True)
 
                 else:
                     db.update_in_db(
@@ -586,8 +564,10 @@ def main(**args):
                         sample_id,
                         {"job_status": job_status},
                     )
-                    base_log.info(f"Updated {sample_id} job status in db")
-                    print(f"Updated {sample_id} job status in db", flush=True)
+
+                    msg = f"Updated {sample_id} job status in db"
+                    base_log.info(msg)
+                    print(msg, flush=True)
 
                 if job_status == "done":
                     utils.download_file_and_update_db(
@@ -597,14 +577,18 @@ def main(**args):
                         download_folder,
                         job,
                     )
-                    base_log.info(f"Downloaded {sample_id} workbook")
-                    print(f"Downloaded {sample_id} workbook", flush=True)
-                else:
-                    base_log.info(f"{job.id} didn't finish successfully")
-                    print(f"{job.id} didn't finish successfully", flush=True)
 
-    base_log.info("Finished workbook monitoring")
-    print("Finished workbook monitoring", flush=True)
+                    msg = f"Downloaded {sample_id} workbook"
+                    base_log.info(msg)
+                    print(msg, flush=True)
+                else:
+                    msg = f"{job.id} didn't finish successfully"
+                    base_log.info(msg)
+                    print(msg, flush=True)
+
+    msg = "Finished workbook monitoring"
+    base_log.info(msg)
+    print(msg, flush=True)
 
 
 if __name__ == "__main__":

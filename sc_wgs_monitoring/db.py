@@ -1,5 +1,4 @@
 import datetime
-import sys
 from typing import Tuple, List
 
 from sqlalchemy import create_engine, select, insert, update
