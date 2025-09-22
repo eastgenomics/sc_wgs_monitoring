@@ -79,7 +79,7 @@ def load_env_variables() -> tuple:
     )
 
 
-def get_sample_id_from_files(files: list, patterns: list) -> Dict:
+def get_sample_id_from_files(files: list, patterns: dict) -> Dict:
     """Get the sample id from the new files detected and link sample ids to
     their files
 
@@ -87,7 +87,7 @@ def get_sample_id_from_files(files: list, patterns: list) -> Dict:
     ----------
     files : list
         List of DNAnexus file objects
-    patterns : list
+    patterns : dict
         Expected patterns for the file name
 
     Returns
@@ -126,7 +126,7 @@ def get_sample_id_from_files(files: list, patterns: list) -> Dict:
 
 def remove_samples(
     sample_files: dict, samples_to_remove: list, incorrect_file_names: list
-) -> Dict:
+) -> tuple:
     """Remove samples from the sample id to files dict
 
     Parameters
@@ -140,8 +140,10 @@ def remove_samples(
 
     Returns
     -------
-    Dict
-        Filtered dict without sample ids with issues
+    tuple
+        Tuple containng:
+        - Filtered dict without sample ids with issues
+        - List of samples with inputs with incorrect names
     """
 
     data = {}
@@ -193,7 +195,7 @@ def remove_pid_div_from_supplementary_file(
 
 
 def find_input_files_in_clingen_input_location(
-    location: str, patterns: list
+    location: str, patterns: dict
 ) -> list:
     """Return all files present in the given location
 
@@ -201,8 +203,8 @@ def find_input_files_in_clingen_input_location(
     ----------
     location : str
         Path in which to look for files
-    patterns : list
-        List of patterns of the expected files
+    patterns : dict
+        Dict of patterns of the expected files
 
     Returns
     -------
@@ -216,44 +218,6 @@ def find_input_files_in_clingen_input_location(
         for file in files
         if check.check_file_input_name_is_correct(file, patterns)
     ]
-
-
-def convert_time_to_epoch(time: str) -> int:
-    """Convert provided time from the user to Epoch
-
-    Parameters
-    ----------
-    time : str
-        String representing the time to convert
-
-    Returns
-    -------
-    int
-        Integer representing Epoch
-
-    Raises
-    ------
-    AssertionError
-        If the time doesn't end with the appropriate suffix
-    """
-
-    match = re.search(r"[smhd]", time)
-
-    if not match:
-        raise AssertionError("No handled unit detected")
-
-    unit = match.group(0)
-
-    time_without_unit = int(time.strip(unit))
-
-    if unit == "s":
-        return time_without_unit
-    elif unit == "m":
-        return time_without_unit * 60
-    elif unit == "h":
-        return time_without_unit * 3600
-    elif unit == "d":
-        return time_without_unit * 3600 * 24
 
 
 def write_file(file_name: str, file_content: str):
@@ -271,7 +235,7 @@ def write_file(file_name: str, file_content: str):
         f.write(str(file_content))
 
 
-def create_output_folder(sample_id: str, location: str) -> PosixPath:
+def create_output_folder(sample_id: str, location: str) -> Path:
     """Create the output folder for the WGS workbook jobs
 
     Parameters
@@ -283,7 +247,7 @@ def create_output_folder(sample_id: str, location: str) -> PosixPath:
 
     Returns
     -------
-    PosixPath
+    Path
         Path of the created folder
     """
 
@@ -297,7 +261,7 @@ def download_file_and_update_db(
     session: Session,
     table: Table,
     sample_id: str,
-    download_location: str,
+    download_location: Path,
     job: dxpy.DXJob,
 ):
     """Given a job, download the dnanexus output file in given clingen
@@ -311,7 +275,7 @@ def download_file_and_update_db(
         SQLAlchemy Table object
     sample_id : str
         Sample id
-    download_location : str
+    download_location : Path
         Path to where the output will be downloaded to
     job : dxpy.DXJob
         DXJob object for the workbook job for the given sample
@@ -339,13 +303,13 @@ def download_file_and_update_db(
         )
 
 
-def move_files(location: str, *files_to_move) -> None:
+def move_files(location: Path, *files_to_move) -> None:
     """Move list of files to given location
 
     Parameters
     ----------
-    location : str
-        Location in which to move the data in
+    location : Path
+        Path in which to move the data in
     files_to_move : *args
         Iterable of files to move
     """
@@ -363,7 +327,7 @@ def move_files(location: str, *files_to_move) -> None:
 
 def start_parallel_workbook_jobs(
     session: Session, table: Table, args_for_starting_jobs: list
-) -> list:
+) -> tuple:
     """Given a list of argument dict per job, start the jobs in parallel
 
     Parameters
@@ -377,8 +341,8 @@ def start_parallel_workbook_jobs(
 
     Returns
     -------
-    list
-        List of job objects created by DNAnexus
+    tuple
+        Tuple of job objects created by DNAnexus
     """
 
     sample_jobs = {}
@@ -394,12 +358,14 @@ def start_parallel_workbook_jobs(
                 app,
                 job_name,
                 output_folder,
+                instance_type,
             ): job_name
             for (
                 inputs,
                 app,
                 job_name,
                 output_folder,
+                instance_type,
             ) in args_for_starting_jobs
         }
 

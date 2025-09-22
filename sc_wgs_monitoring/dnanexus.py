@@ -128,10 +128,11 @@ def prepare_inputs(
     sample: str,
     files: list,
     folder: str,
-    patterns: list,
+    patterns: dict,
     workbook_inputs: dict,
     workbook_app: dxpy.DXApp,
-) -> dict:
+    instance_type: str,
+) -> tuple:
     """Prepare the inputs for starting the jobs
 
     Parameters
@@ -142,8 +143,8 @@ def prepare_inputs(
         List of files for one job
     folder : str
         Folder output
-    patterns : list
-        List of patterns for assignment to the correct input name
+    patterns : dict
+        Dict of patterns for assignment to the correct input name
     workbook_inputs : dict
         Dict containing reference files
     workbook_app : dxpy.DXApp
@@ -151,8 +152,8 @@ def prepare_inputs(
 
     Returns
     -------
-    dict
-        Dict containing all the input names and their inputs
+    tuple
+        Tuple containing all the input names and their inputs
     """
 
     inputs = {}
@@ -169,6 +170,7 @@ def prepare_inputs(
         workbook_app,
         sample,
         f"{folder}/output",
+        instance_type,
     )
 
 
@@ -177,6 +179,7 @@ def start_wgs_workbook_job(
     app: dxpy.DXApp,
     job_name: str,
     output_folder: str,
+    instance_type: str,
 ) -> dxpy.DXJob:
     """Start the WGS Solid cancer workbook job
 
@@ -197,4 +200,9 @@ def start_wgs_workbook_job(
         DXJob object
     """
 
-    return app.run(workbook_inputs, name=job_name, folder=output_folder)
+    return app.run(
+        workbook_inputs,
+        name=job_name,
+        folder=output_folder,
+        instance_type=instance_type,
+    )
