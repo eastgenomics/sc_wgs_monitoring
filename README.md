@@ -80,6 +80,7 @@ CONFIG = {
     },
     "clingen_input_location": "",
     "clingen_download_location": "",
+    "instance_type": "",
 }
 ```
 

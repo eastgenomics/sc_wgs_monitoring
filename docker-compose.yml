@@ -19,7 +19,7 @@ services:
     build:
       context: .
       dockerfile: monitoring_app.Dockerfile
-    image: sc_wgs_monitoring:1.0.1
+    image: sc_wgs_monitoring:1.0.2
     expose:
       - 8010
     depends_on:
