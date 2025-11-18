@@ -225,7 +225,7 @@ def main(**args):
             if all(
                 [data["processed"] for data in sample_files_tagged.values()]
             ) and (not args["dnanexus_ids"] and not args["local_files"]):
-                msg = ("All detected samples have already been processed",)
+                msg = "All detected samples have already been processed"
                 base_log.warning(msg)
                 print(msg, flush=True)
                 sys.exit()
