@@ -297,7 +297,7 @@ def main(**args):
                     base_log.info(msg)
                     print(msg, flush=True)
 
-                # rename the variable in order to standadize naming afterward
+                # rename the variable in order to standardize naming afterward
                 dnanexus_data = sample_files_tagged
 
             else:
