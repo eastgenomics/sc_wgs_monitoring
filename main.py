@@ -369,7 +369,7 @@ def main(**args):
                             else:
                                 files.append(file)
 
-                    if files:
+                    if files and data["processed"] is False:
                         new_sample_files[sample_id]["files"] = files
 
                 sample_files_tagged = new_sample_files
