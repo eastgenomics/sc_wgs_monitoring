@@ -379,8 +379,8 @@ def main(**args):
                 )
 
                 msg = (
-                    f"Uploaded {len(dnanexus_data.values())} file(s) to "
-                    "DNAnexus"
+                    f"Uploaded files for {len(dnanexus_data.values())} "
+                    "samples to DNAnexus"
                 )
                 base_log.info(msg)
                 print(msg, flush=True)
