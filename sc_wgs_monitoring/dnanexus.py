@@ -1,3 +1,4 @@
+import datetime
 from pathlib import PosixPath
 from typing import Dict
 import re
@@ -23,14 +24,14 @@ def login_to_dnanexus(token: str):
 
 
 def upload_input_files(
-    date: str, project: dxpy.DXProject, sample_files: Dict
+    date: datetime.datetime, project: dxpy.DXProject, sample_files: Dict
 ) -> dict:
     """Upload the input files required for creating the WGS workbook
 
     Parameters
     ----------
-    date: str
-        String for the date in YYMMDD format
+    date: datetime.datetime
+        Datetime object
     project: dxpy.DXProject
         DXProject object
     sample_files : Dict
@@ -45,7 +46,9 @@ def upload_input_files(
     data_to_return = {}
 
     for sample, data in sample_files.items():
-        folder = f"/{date}/{sample}"
+        folder = (
+            f"/{date.strftime("%Y-%m")}/{date.strftime("%y%m%d")}/{sample}"
+        )
         data_to_return.setdefault(sample, {})
         dxpy.api.project_new_folder(
             project.id, input_params={"folder": folder, "parents": True}

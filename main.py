@@ -57,7 +57,8 @@ def main(**args):
         dxid=config_data["sd_wgs_workbook_app_id"]
     )
 
-    date = datetime.date.today().strftime("%y%m%d")
+    date = datetime.date.today()
+    date_str = date.strftime("%y%m%d")
     now = datetime.datetime.now().strftime("%y%m%d | %H:%M:%S")
 
     header_msg = (
@@ -254,7 +255,7 @@ def main(**args):
                     # else
                     sample_files_tagged[sample_id][
                         "folder"
-                    ] = f"/{date}/{sample_id}"
+                    ] = f"/{date_str}/{sample_id}"
                     # make DXFiles for use later if necessary
                     sample_files_tagged[sample_id]["files"] = [
                         (
@@ -272,7 +273,7 @@ def main(**args):
                             sample_id,
                             {
                                 "processing_status": "Preprocessing before job start",
-                                "date": date,
+                                "date": date_str,
                             },
                         )
 
@@ -309,7 +310,7 @@ def main(**args):
                             sc_wgs_table,
                             **{
                                 "referral_id": sample_id,
-                                "date": date,
+                                "date": date_str,
                                 "processing_status": "Preprocessing before job start",
                             },
                         )
@@ -322,7 +323,7 @@ def main(**args):
                                 sample_id,
                                 {
                                     "processing_status": "Preprocessing before job start",
-                                    "date": date,
+                                    "date": date_str,
                                 },
                             )
 
@@ -544,7 +545,7 @@ def main(**args):
                         sc_wgs_table,
                         **{
                             "referral_id": sample_id,
-                            "date": date,
+                            "date": date_str,
                             "job_id": job.id,
                             "job_status": job.state,
                             "processing_status": "Job completed",
