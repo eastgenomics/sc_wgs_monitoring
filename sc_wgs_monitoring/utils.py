@@ -1,6 +1,7 @@
 import concurrent
 import datetime
 import importlib.util
+import logging
 from pathlib import Path, PosixPath
 from typing import Dict
 import os
@@ -13,10 +14,12 @@ import dxpy
 from sqlalchemy.schema import Table
 from sqlalchemy.orm import Session
 
-from sc_wgs_monitoring import check, db, dnanexus
+from sc_wgs_monitoring import check, db, dnanexus, logger
+
+base_log = logging.getLogger("basic")
 
 
-def load_config(config_file) -> Dict:
+def load_config(config_file: str) -> Dict:
     """Load the configuration file
 
     Returns
@@ -297,6 +300,8 @@ def download_file_and_update_db(
                 "processing_status": "Workbook downloaded",
             },
         )
+        msg = f"Output files for {sample_id} have been downloaded"
+        logger.log(base_log, "info", msg)
     else:
         raise FileNotFoundError(
             f"{Path(download_location / f'{sample_id}.xlsx')} wasn't downloaded"
@@ -315,14 +320,21 @@ def move_files(location: Path, *files_to_move) -> None:
     """
 
     new_folder = Path(location)
+    moved_files = {}
 
     for file in files_to_move:
         if type(file) is not PosixPath:
             for f in file:
                 if type(f) is PosixPath:
                     move(f, new_folder / f.name)
+                    moved_files[f] = f"{new_folder / f.name}"
         else:
             move(file, new_folder / file.name)
+            moved_files[file] = f"{new_folder / file.name}"
+
+    msg = f"The following files have been moved to {new_folder}:\n"
+    msg += f"{'\n'.join([f" - {old} -> {new}" for old, new in moved_files.items()])}"
+    logger.log(base_log, "info", msg)
 
 
 def start_parallel_workbook_jobs(
@@ -390,6 +402,9 @@ def start_parallel_workbook_jobs(
                     "workbook_dnanexus_location": f"{job.project}:{job.folder}",
                 },
             )
+
+    msg = f"{len(sample_jobs)} job(s) started, starting job monitoring..."
+    logger.log(base_log, "info", msg)
 
     return sample_jobs, errors
 
