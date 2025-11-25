@@ -1,12 +1,18 @@
 import argparse
 import datetime
 import logging
-from pathlib import Path
 import sys
 
 import dxpy
 
-from sc_wgs_monitoring import check, dnanexus, db, logger, notifications, utils
+from sc_wgs_monitoring import (
+    dnanexus,
+    db,
+    logger,
+    notifications,
+    setup,
+    utils,
+)
 
 logger.set_up_logger()
 base_log = logging.getLogger("basic")
@@ -14,377 +20,57 @@ base_log = logging.getLogger("basic")
 
 def main(**args):
     (
-        dx_token,
+        config_data,
         slack_token,
         slack_log_channel,
         slack_alert_channel,
-        sc_wgs_db,
-        postgres_user,
-        postgres_pwd,
-    ) = utils.load_env_variables()
-    config_data = utils.load_config(args["config"])
-
-    if args["time_to_check"]:
-        assert args["time_to_check"].endswith(
-            ("s", "m", "h", "d")
-        ), "The time_to_check argument doesn't end with one of s|m|h|d"
-
-    # override the values in the config file if the cli was used to override
-    for config_key in config_data:
-        config_override_value = args.get(config_key, None)
-
-        if config_override_value:
-            config_data[config_key] = config_override_value
-        else:
-            if config_key in config_data["workbook_inputs"]:
-                config_data["workbook_inputs"][
-                    config_key
-                ] = config_override_value
-
-    # Database setup things
-    session, meta = db.connect_to_db(
-        postgres_user,
-        postgres_pwd,
-        sc_wgs_db,
-    )
-    sc_wgs_table = meta.tables["sc_wgs_data"]
-
-    # DNAnexus setup things
-    dnanexus.login_to_dnanexus(dx_token)
-    sd_wgs_project = dxpy.bindings.DXProject(config_data["project_id"])
-    dxpy.set_workspace_id(sd_wgs_project.id)
-    sc_wgs_workbook_app = dxpy.bindings.dxapp.DXApp(
-        dxid=config_data["sd_wgs_workbook_app_id"]
-    )
-
-    date = datetime.date.today()
-    date_str = date.strftime("%y%m%d")
-    now = datetime.datetime.now().strftime("%y%m%d | %H:%M:%S")
+        session,
+        sc_wgs_table,
+        sc_wgs_workbook_app,
+        sd_wgs_project,
+        date,
+        date_str,
+        now,
+    ) = setup.setup_environment(**args)
 
     header_msg = (
         f"{now} - :excel: Solid Cancer Workbooks :excel: - Command line: "
         f"`{' '.join(sys.argv)}`\n\n"
     )
 
-    base_log.info(header_msg.replace("\n", "").replace(":excel:", ""))
-    print(header_msg.replace("\n", "").replace(":excel:", ""), flush=True)
-
-    if not args["start_jobs"] and not args["download_job_output"]:
-        msg = "No processing type specified, please use -s or -j"
-        base_log.error(msg)
-        raise AssertionError(msg)
+    logger.log(
+        base_log, "info", header_msg.replace("\n", "").replace(":excel:", "")
+    )
 
     # start WGS workbook jobs
     if args["start_jobs"]:
-        new_files = None
-        patterns = {
-            r"[-_]reported_structural_variants\..*\.csv": "reported_structural_variants",
-            r"[-_]reported_variants\..*\.csv": "reported_variants",
-            r"\..*\.supplementary.*\.html": "supplementary_html",
-        }
-
-        # handle given dnanexus ids
-        if args["dnanexus_ids"]:
-            if all(
-                [
-                    check.check_dnanexus_id(file)
-                    for file in args["dnanexus_ids"]
-                ]
-            ):
-                new_files = [
-                    dxpy.DXFile(file) for file in args["dnanexus_ids"]
-                ]
-            else:
-                msg = (
-                    f"Provided files {args['dnanexus_ids']} are not all "
-                    "DNAnexus file ids"
-                )
-                base_log.error(msg)
-                raise AssertionError(msg)
-
-        else:
-            # handle specified local files to process
-            if args["local_files"]:
-                if not all(
-                    [
-                        check.check_if_file_exists(file)
-                        for file in args["local_files"]
-                    ]
-                ):
-                    msg = (
-                        "One of the files given doesn't exist "
-                        f"{'|'.join([file for file in args["local_files"]])}"
-                    )
-                    base_log.error(msg)
-                    raise AssertionError(msg)
-
-                new_files = [Path(file) for file in args["local_files"]]
-
-            # handle file detection
-            else:
-                new_files = utils.find_input_files_in_clingen_input_location(
-                    config_data["clingen_input_location"], patterns
-                )
-
-        silent_errors = []
+        new_files = setup.get_inputs(
+            config_data["clingen_download_location"],
+            config_data["input_patterns"],
+            **args,
+        )
 
         if new_files:
-            # group files per id
-            sample_files = utils.get_sample_id_from_files(new_files, patterns)
-
-            # check if the files have expected suffixes
-            files_with_incorrect_file_name = [
-                file.name
-                for file in new_files
-                if not check.check_file_input_name_is_correct(
-                    file.name, patterns
-                )
-            ]
-
-            if len(files_with_incorrect_file_name) != 0:
-                msg = (
-                    "The set of provided files is not correct. Expected files "
-                    f"with the following patterns: {[
-                        r'[-_]reported_structural_variants\..*\.csv',
-                        r'[-_]reported_variants\..*\.csv',
-                        r'\..*\.supplementary\.html',
-                    ]}. "
-                    f"Got {" | ".join([file for file in files_with_incorrect_file_name])}"
-                )
-                base_log.error(msg)
-                silent_errors.append(msg)
-
-            samples_with_incomplete_sets = [
-                (sample, files)
-                for sample, files in sample_files.items()
-                if len(files) != 3
-            ]
-
-            if len(samples_with_incomplete_sets) != 0:
-                msg = "The following samples do not have 3 files:\n"
-
-                for sample, files in samples_with_incomplete_sets:
-                    msg += f"- {sample}\n"
-
-                    for file in files:
-                        msg += f"  - {file}\n"
-
-                base_log.error(msg.rstrip("\n"))
-                silent_errors.append(msg.rstrip("\n"))
-
-                samples_with_incomplete_sets = [
-                    sample for sample, files in samples_with_incomplete_sets
-                ]
-
-            sample_files, removed_samples = utils.remove_samples(
-                sample_files,
-                samples_with_incomplete_sets,
-                files_with_incorrect_file_name,
+            sample_files, silent_errors = setup.check_inputs(
+                new_files, config_data["input_patterns"]
             )
 
-            if len(sample_files) == 0:
-                msg = (
-                    "No samples are left after removing samples with issues.\n"
-                )
-
-                if len(files_with_incorrect_file_name) != 0:
-                    msg += (
-                        "Removed samples due wrong file name: "
-                        f"{' | '.join(removed_samples)}\n"
-                    )
-
-                if len(samples_with_incomplete_sets) != 0:
-                    msg += (
-                        "Removed samples due to incomplete set of files: "
-                        f"{' | '.join(samples_with_incomplete_sets)}\n"
-                    )
-
-                base_log.error(msg)
-                raise AssertionError(msg)
-
-            message = ""
-
-            # build report message for samples and their files
-            for sample, files in sample_files.items():
-                message += f"- {sample}\n"
-
-                for file in files:
-                    message += f"  - {file.name}\n"
-
-            msg = (
-                f"Detected {len(sample_files)} sample(s) with the following "
-                f"files for processing:\n{message}"
+            sample_files_tagged = setup.check_processed_samples(
+                sample_files, session, sc_wgs_table, **args
+            )
+            dnanexus_data = setup.insert_inputs_in_db(
+                sample_files_tagged, date, date_str, session, sc_wgs_table
             )
 
-            base_log.info(msg)
-            print(msg, flush=True)
-
-            sample_files_tagged = db.tag_processed_samples(
-                session, sc_wgs_table, sample_files
-            )
-
-            if all(
-                [data["processed"] for data in sample_files_tagged.values()]
-            ) and (not args["dnanexus_ids"] and not args["local_files"]):
-                msg = "All detected samples have already been processed"
-                base_log.warning(msg)
-                print(msg, flush=True)
-                sys.exit()
-
-            processed_samples = [
-                sample
-                for sample, data in sample_files_tagged.items()
-                if data["processed"] is True
-            ]
-
-            if processed_samples:
-                msg = (
-                    "The following samples are already in the database:\n - "
-                    f"{"\n - ".join(processed_samples)}\n"
+            if not args["dnanexus_ids"]:
+                new_sample_files = setup.remove_pid(
+                    sample_files_tagged, config_data["pid_div_id"], **args
                 )
-                base_log.warning(msg)
-                print(msg, flush=True)
-
-            db_data = []
-
-            # if dnanexus file ids were specified no need for upload or removal
-            # of pid
-            if args["dnanexus_ids"]:
-                for sample_id, data in sample_files_tagged.items():
-                    # add the folder key to match the data structure in the
-                    # else
-                    sample_files_tagged[sample_id][
-                        "folder"
-                    ] = f"/{date_str}/{sample_id}"
-                    # make DXFiles for use later if necessary
-                    sample_files_tagged[sample_id]["files"] = [
-                        (
-                            dxpy.DXFile(file)
-                            if type(file) is not dxpy.DXFile
-                            else file
-                        )
-                        for file in sample_files_tagged[sample_id]["files"]
-                    ]
-
-                    if data["processed"]:
-                        db.update_in_db(
-                            session,
-                            sc_wgs_table,
-                            sample_id,
-                            {
-                                "processing_status": "Preprocessing before job start",
-                                "date": date_str,
-                            },
-                        )
-
-                        msg = f"Updated data for {sample_id} in db"
-                        base_log.info(msg)
-                        print(msg, flush=True)
-                    else:
-                        sample_data = db.prepare_data_for_import(
-                            sc_wgs_table,
-                            **{
-                                "referral_id": sample_id,
-                                "date": date,
-                                "processing_status": "Preprocessing before job start",
-                            },
-                        )
-                        db_data.append(sample_data)
-
-                if db_data:
-                    db.insert_in_db(session, sc_wgs_table, db_data)
-
-                    msg = f"Inserted new {len(db_data)} sample(s) in db"
-                    base_log.info(msg)
-                    print(msg, flush=True)
-
-                # rename the variable in order to standardize naming afterward
-                dnanexus_data = sample_files_tagged
-
-            else:
-                for sample_id, data in sample_files_tagged.items():
-                    if data["processed"] is False:
-                        # prepare the import the unprocessed data in the
-                        # database
-                        sample_data = db.prepare_data_for_import(
-                            sc_wgs_table,
-                            **{
-                                "referral_id": sample_id,
-                                "date": date_str,
-                                "processing_status": "Preprocessing before job start",
-                            },
-                        )
-                        db_data.append(sample_data)
-                    else:
-                        if args["local_files"]:
-                            db.update_in_db(
-                                session,
-                                sc_wgs_table,
-                                sample_id,
-                                {
-                                    "processing_status": "Preprocessing before job start",
-                                    "date": date_str,
-                                },
-                            )
-
-                            msg = f"Updated data for {sample_id} in db"
-                            base_log.info(msg)
-                            print(msg, flush=True)
-
-                if db_data:
-                    db.insert_in_db(session, sc_wgs_table, db_data)
-
-                    msg = f"Inserted new {len(db_data)} sample(s) in db"
-                    base_log.info(msg)
-                    print(msg, flush=True)
-
-                msg = (
-                    "Removing pid divs, this step can take some time "
-                    "depending on the number of files to process..."
-                )
-                base_log.info(msg)
-                print(msg, flush=True)
-
-                new_sample_files = {}
-
-                for sample_id, data in sample_files_tagged.items():
-                    files = []
-                    new_sample_files[sample_id] = data
-
-                    for file in data["files"]:
-                        # remove the pid div only on unprocessed samples or if
-                        # local files are specified
-                        if args["local_files"] or data["processed"] is False:
-                            if file.name.endswith(".supplementary.html"):
-                                files.append(
-                                    (
-                                        file,
-                                        (
-                                            utils.remove_pid_div_from_supplementary_file(
-                                                file,
-                                                config_data["pid_div_id"],
-                                            )
-                                        ),
-                                    )
-                                )
-                            else:
-                                files.append(file)
-
-                    if files and data["processed"] is False:
-                        new_sample_files[sample_id]["files"] = files
-
                 sample_files_tagged = new_sample_files
 
                 dnanexus_data = dnanexus.upload_input_files(
                     date, sd_wgs_project, sample_files_tagged
                 )
-
-                msg = (
-                    f"Uploaded files for {len(dnanexus_data.values())} "
-                    "samples to DNAnexus"
-                )
-                base_log.info(msg)
-                print(msg, flush=True)
 
             args_for_starting_jobs = []
 
@@ -395,7 +81,7 @@ def main(**args):
                         sample_id,
                         data["files"],
                         data["folder"],
-                        patterns,
+                        config_data["input_patterns"],
                         config_data["workbook_inputs"],
                         sc_wgs_workbook_app,
                         config_data["instance_type"],
@@ -412,13 +98,6 @@ def main(**args):
                     slack_alert_channel,
                     slack_token,
                 )
-
-            msg = (
-                f"{len(sample_jobs)} job(s) started, starting job "
-                "monitoring..."
-            )
-            base_log.info(msg)
-            print(msg, flush=True)
 
             job_failures = utils.monitor_jobs(
                 session, sc_wgs_table, sample_jobs.values()
@@ -442,23 +121,12 @@ def main(**args):
                         job,
                     )
 
-                    msg = f"Output files for {sample_id} have been downloaded"
-                    base_log.info(msg)
-                    print(msg, flush=True)
-
                     # move the input files only if they are not dnanexus files
                     if not args["dnanexus_ids"]:
                         utils.move_files(
                             download_folder,
                             *sample_files_tagged[sample_id]["files"],
                         )
-
-                        msg = (
-                            f"Input files for {sample_id} have been moved "
-                            "to output location"
-                        )
-                        base_log.info(msg)
-                        print(msg, flush=True)
 
             if job_failures:
                 notifications.slack_notify(
@@ -479,118 +147,96 @@ def main(**args):
 
         else:
             msg = "Couldn't find any files"
-            base_log.info(msg)
-            print(msg, flush=True)
+            logger.log(base_log, "info", msg)
+
+    elif args["daily_report"]:
+        now = datetime.datetime.strptime(now, "%y%m%d | %H:%M:%S")
+        jobs_for_day = db.get_samples_for_the_day(
+            session, sc_wgs_table, now - datetime.timedelta(days=1)
+        )
+        report = notifications.build_report(
+            jobs_for_day,
+            (now - datetime.timedelta(days=1)).strftime("%y%m%d | %H:%M:%S"),
+        )
+        notifications.slack_notify(report, slack_log_channel, slack_token)
+        logger.log(base_log, "info", report)
 
     # check jobs that have finished
-    if args["download_job_output"]:
-        if args["daily_report"]:
-            now = datetime.datetime.strptime(now, "%y%m%d | %H:%M:%S")
-            jobs_for_day = db.get_samples_for_the_day(
-                session, sc_wgs_table, now - datetime.timedelta(days=1)
-            )
-            report = notifications.build_report(
-                jobs_for_day,
-                (now - datetime.timedelta(days=1)).strftime(
-                    "%y%m%d | %H:%M:%S"
-                ),
-            )
-            notifications.slack_notify(report, slack_log_channel, slack_token)
-            base_log.info(report)
-            print(report, flush=True)
-
+    elif args["download_job_output"]:
+        if args["dnanexus_ids"]:
+            executions = [{"id": job_id} for job_id in args["dnanexus_ids"]]
         else:
-            if args["dnanexus_ids"]:
-                executions = [
-                    {"id": job_id} for job_id in args["dnanexus_ids"]
-                ]
-            else:
-                # store the job generator in a list so it doesn't get exhausted
-                # the first time i go through it
-                executions = list(
-                    dxpy.bindings.find_executions(
-                        executable=config_data["sd_wgs_workbook_app_id"],
-                        project=sd_wgs_project,
-                        created_after=f"-{args['time_to_check']}",
-                    )
+            # store the job generator in a list so it doesn't get exhausted
+            # the first time i go through it
+            executions = list(
+                dxpy.bindings.find_executions(
+                    executable=config_data["sd_wgs_workbook_app_id"],
+                    project=sd_wgs_project,
+                    created_after=f"-{args['time_to_check']}",
                 )
-
-            msg = (
-                "Found the following jobs: "
-                f"{" | ".join([job["id"] for job in executions])}"
             )
-            base_log.info(msg)
-            print(msg, flush=True)
 
-            for execution in executions:
-                job = dxpy.DXJob(execution["id"])
-                supplementary_html_file = dxpy.DXFile(
-                    job.runInput["supplementary_html"]["$dnanexus_link"]
+        msg = (
+            "Found the following jobs: "
+            f"{" | ".join([job["id"] for job in executions])}"
+        )
+        logger.log(base_log, "info", msg)
+
+        for execution in executions:
+            job = dxpy.DXJob(execution["id"])
+            supplementary_html_file = dxpy.DXFile(
+                job.runInput["supplementary_html"]["$dnanexus_link"]
+            )
+            sample_id = supplementary_html_file.name.split(".")[0]
+
+            # get job status
+            job_status = job.state
+
+            is_in_db = db.look_for_processed_samples(
+                session, sc_wgs_table, sample_id
+            )
+
+            download_folder = utils.create_output_folder(
+                sample_id, config_data["clingen_download_location"]
+            )
+
+            if is_in_db is None:
+                sample_data = db.prepare_data_for_import(
+                    sc_wgs_table,
+                    **{
+                        "referral_id": sample_id,
+                        "date": date_str,
+                        "job_id": job.id,
+                        "job_status": job.state,
+                        "processing_status": "Job completed",
+                        "workbook_dnanexus_location": f"{config_data['project_id']}:"
+                        f"{supplementary_html_file.folder}/output",
+                    },
                 )
-                sample_id = supplementary_html_file.name.split(".")[0]
+                db.insert_in_db(session, sc_wgs_table, [sample_data])
 
-                # get job status
-                job_status = job.state
-
-                is_in_db = db.look_for_processed_samples(
-                    session, sc_wgs_table, sample_id
+            else:
+                db.update_in_db(
+                    session,
+                    sc_wgs_table,
+                    sample_id,
+                    {"job_status": job_status},
                 )
 
-                download_folder = utils.create_output_folder(
-                    sample_id, config_data["clingen_download_location"]
+            if job_status == "done":
+                utils.download_file_and_update_db(
+                    session,
+                    sc_wgs_table,
+                    sample_id,
+                    download_folder,
+                    job,
                 )
-
-                if is_in_db is None:
-                    sample_data = db.prepare_data_for_import(
-                        sc_wgs_table,
-                        **{
-                            "referral_id": sample_id,
-                            "date": date_str,
-                            "job_id": job.id,
-                            "job_status": job.state,
-                            "processing_status": "Job completed",
-                            "workbook_dnanexus_location": f"{config_data['project_id']}:"
-                            f"{supplementary_html_file.folder}/output",
-                        },
-                    )
-                    db.insert_in_db(session, sc_wgs_table, [sample_data])
-
-                    msg = f"Inserted {sample_id} data"
-                    base_log.info(msg)
-                    print(msg, flush=True)
-
-                else:
-                    db.update_in_db(
-                        session,
-                        sc_wgs_table,
-                        sample_id,
-                        {"job_status": job_status},
-                    )
-
-                    msg = f"Updated {sample_id} job status in db"
-                    base_log.info(msg)
-                    print(msg, flush=True)
-
-                if job_status == "done":
-                    utils.download_file_and_update_db(
-                        session,
-                        sc_wgs_table,
-                        sample_id,
-                        download_folder,
-                        job,
-                    )
-
-                    msg = f"Downloaded {sample_id} workbook"
-                    base_log.info(msg)
-                    print(msg, flush=True)
-                else:
-                    msg = f"{job.id} didn't finish successfully"
-                    base_log.info(msg)
-                    print(msg, flush=True)
+            else:
+                msg = f"{job.id} didn't finish successfully"
+                logger.log(base_log, "info", msg)
 
     msg = "Finished workbook monitoring"
-    base_log.info(msg)
-    print(msg, flush=True)
+    logger.log(base_log, "info", msg)
 
 
 if __name__ == "__main__":
