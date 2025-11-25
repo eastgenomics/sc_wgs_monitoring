@@ -55,3 +55,20 @@ def set_up_logger():
     log_path = Path("/app/sc_wgs_monitoring/logs/")
     log_path.mkdir(parents=True, exist_ok=True)
     logging.config.dictConfig(LOGGING)
+
+
+def log(logger: logging.Logger, type_log: str, msg: str):
+    """Helper function allowing logging with multiple types of logs
+
+    Parameters
+    ----------
+    logger : logging.Logger
+        Logger object to log to
+    type_log : str
+        Type of log to write
+    msg : str
+        Message to write
+    """
+
+    getattr(logger, type_log)(msg)
+    print(msg, flush=True)
