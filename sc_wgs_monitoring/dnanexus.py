@@ -1,9 +1,14 @@
 import datetime
+import logging
 from pathlib import PosixPath
 from typing import Dict
 import re
 
 import dxpy
+
+from sc_wgs_monitoring import logger
+
+base_log = logging.getLogger("basic")
 
 
 def login_to_dnanexus(token: str):
@@ -24,14 +29,14 @@ def login_to_dnanexus(token: str):
 
 
 def upload_input_files(
-    date: datetime.datetime, project: dxpy.DXProject, sample_files: Dict
+    date: datetime.date, project: dxpy.DXProject, sample_files: Dict
 ) -> dict:
     """Upload the input files required for creating the WGS workbook
 
     Parameters
     ----------
-    date: datetime.datetime
-        Datetime object
+    date: datetime.date
+        Date object
     project: dxpy.DXProject
         DXProject object
     sample_files : Dict
@@ -75,6 +80,12 @@ def upload_input_files(
                 dxfile.describe()
 
             data_to_return[sample].setdefault("files", []).append(dxfile)
+
+    msg = (
+        f"Uploaded files for {len(sample_files.values())} "
+        "samples to DNAnexus"
+    )
+    logger.log(base_log, "info", msg)
 
     return data_to_return
 
