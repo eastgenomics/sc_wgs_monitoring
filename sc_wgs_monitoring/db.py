@@ -1,10 +1,15 @@
 import datetime
+import logging
 from typing import Tuple, List
 
 from sqlalchemy import create_engine, select, insert, update
 from sqlalchemy.schema import Table
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.sql.schema import MetaData
+
+from sc_wgs_monitoring import logger
+
+base_log = logging.getLogger("basic")
 
 
 def connect_to_db(
@@ -87,6 +92,9 @@ def insert_in_db(session: Session, table: Table, data: List):
     session.execute(insert_obj)
     session.commit()
 
+    msg = f"Inserted new {len(data)} sample(s) in db"
+    logger.log(base_log, "info", msg)
+
 
 def update_in_db(
     session: Session, table: Table, referral_id: str, update_data: dict
@@ -113,6 +121,9 @@ def update_in_db(
     )
     session.execute(update_obj)
     session.commit()
+
+    msg = f"Updated {referral_id} job status in db"
+    logger.log(base_log, "info", msg)
 
 
 def get_samples_for_the_day(
