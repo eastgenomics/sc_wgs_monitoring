@@ -75,6 +75,6 @@ def build_report(jobs_dict: dict, date: str) -> str:
             for job in job_data:
                 report += f"    - {job['referral_id']} | `{job['job_id']}`\n"
     else:
-        report += "\nNo jobs detected."
+        report += "No jobs detected."
 
     return report
