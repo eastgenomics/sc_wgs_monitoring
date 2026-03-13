@@ -24,13 +24,13 @@ def login_to_dnanexus(token: str):
 
 
 def upload_input_files(
-    date: datetime.datetime, project: dxpy.DXProject, sample_files: Dict
+    date: datetime.date, project: dxpy.DXProject, sample_files: Dict
 ) -> dict:
     """Upload the input files required for creating the WGS workbook
 
     Parameters
     ----------
-    date: datetime.datetime
+    date: datetime.date
         Datetime object
     project: dxpy.DXProject
         DXProject object
