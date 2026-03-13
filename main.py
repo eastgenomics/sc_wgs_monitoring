@@ -67,12 +67,10 @@ def main(**args):
     )
 
     base_log.info(header_msg.replace("\n", "").replace(":excel:", ""))
-    print(header_msg.replace("\n", "").replace(":excel:", ""), flush=True)
 
     if not args["start_jobs"] and not args["download_job_output"]:
         msg = "No processing type specified, please use -s or -j"
         base_log.error(msg)
-        raise AssertionError(msg)
 
     # start WGS workbook jobs
     if args["start_jobs"]:
@@ -100,7 +98,6 @@ def main(**args):
                     "DNAnexus file ids"
                 )
                 base_log.error(msg)
-                raise AssertionError(msg)
 
         else:
             # handle specified local files to process
@@ -116,7 +113,7 @@ def main(**args):
                         f"{'|'.join([file for file in args["local_files"]])}"
                     )
                     base_log.error(msg)
-                    raise AssertionError(msg)
+                    sys.exit()
 
                 new_files = [Path(file) for file in args["local_files"]]
 
@@ -200,7 +197,10 @@ def main(**args):
                     )
 
                 base_log.error(msg)
-                raise AssertionError(msg)
+                notifications.slack_notify(
+                    f"{header_msg + msg}", slack_alert_channel, slack_token
+                )
+                sys.exit()
 
             message = ""
 
@@ -217,7 +217,6 @@ def main(**args):
             )
 
             base_log.info(msg)
-            print(msg, flush=True)
 
             sample_files_tagged = db.tag_processed_samples(
                 session, sc_wgs_table, sample_files
@@ -227,8 +226,7 @@ def main(**args):
                 [data["processed"] for data in sample_files_tagged.values()]
             ) and (not args["dnanexus_ids"] and not args["local_files"]):
                 msg = "All detected samples have already been processed"
-                base_log.warning(msg)
-                print(msg, flush=True)
+                base_log.error(msg)
                 sys.exit()
 
             processed_samples = [
@@ -243,7 +241,6 @@ def main(**args):
                     f"{"\n - ".join(processed_samples)}\n"
                 )
                 base_log.warning(msg)
-                print(msg, flush=True)
 
             db_data = []
 
@@ -279,7 +276,6 @@ def main(**args):
 
                         msg = f"Updated data for {sample_id} in db"
                         base_log.info(msg)
-                        print(msg, flush=True)
                     else:
                         sample_data = db.prepare_data_for_import(
                             sc_wgs_table,
@@ -296,7 +292,6 @@ def main(**args):
 
                     msg = f"Inserted new {len(db_data)} sample(s) in db"
                     base_log.info(msg)
-                    print(msg, flush=True)
 
                 # rename the variable in order to standardize naming afterward
                 dnanexus_data = sample_files_tagged
@@ -329,21 +324,18 @@ def main(**args):
 
                             msg = f"Updated data for {sample_id} in db"
                             base_log.info(msg)
-                            print(msg, flush=True)
 
                 if db_data:
                     db.insert_in_db(session, sc_wgs_table, db_data)
 
                     msg = f"Inserted new {len(db_data)} sample(s) in db"
                     base_log.info(msg)
-                    print(msg, flush=True)
 
                 msg = (
                     "Removing pid divs, this step can take some time "
                     "depending on the number of files to process..."
                 )
                 base_log.info(msg)
-                print(msg, flush=True)
 
                 new_sample_files = {}
 
@@ -384,7 +376,6 @@ def main(**args):
                     "samples to DNAnexus"
                 )
                 base_log.info(msg)
-                print(msg, flush=True)
 
             args_for_starting_jobs = []
 
@@ -418,7 +409,6 @@ def main(**args):
                 "monitoring..."
             )
             base_log.info(msg)
-            print(msg, flush=True)
 
             job_failures = utils.monitor_jobs(
                 session, sc_wgs_table, sample_jobs.values()
@@ -444,7 +434,6 @@ def main(**args):
 
                     msg = f"Output files for {sample_id} have been downloaded"
                     base_log.info(msg)
-                    print(msg, flush=True)
 
                     # move the input files only if they are not dnanexus files
                     if not args["dnanexus_ids"]:
@@ -458,7 +447,6 @@ def main(**args):
                             "to output location"
                         )
                         base_log.info(msg)
-                        print(msg, flush=True)
 
             if job_failures:
                 notifications.slack_notify(
@@ -470,17 +458,15 @@ def main(**args):
             # if errors were detected for some but not all files, allow the
             # processing to go through and trigger slack message at the end
             if silent_errors:
-                raise AssertionError(
-                    (
-                        "Errors were detected for some of the files detected. "
-                        "Please investigate in the logs"
-                    )
+                notifications.slack_notify(
+                    f"{header_msg + '\n'.join(silent_errors)}",
+                    slack_alert_channel,
+                    slack_token,
                 )
 
         else:
             msg = "Couldn't find any files"
             base_log.info(msg)
-            print(msg, flush=True)
 
     # check jobs that have finished
     if args["download_job_output"]:
@@ -497,7 +483,6 @@ def main(**args):
             )
             notifications.slack_notify(report, slack_log_channel, slack_token)
             base_log.info(report)
-            print(report, flush=True)
 
         else:
             if args["dnanexus_ids"]:
@@ -520,7 +505,6 @@ def main(**args):
                 f"{" | ".join([job["id"] for job in executions])}"
             )
             base_log.info(msg)
-            print(msg, flush=True)
 
             for execution in executions:
                 job = dxpy.DXJob(execution["id"])
@@ -557,7 +541,6 @@ def main(**args):
 
                     msg = f"Inserted {sample_id} data"
                     base_log.info(msg)
-                    print(msg, flush=True)
 
                 else:
                     db.update_in_db(
@@ -569,7 +552,6 @@ def main(**args):
 
                     msg = f"Updated {sample_id} job status in db"
                     base_log.info(msg)
-                    print(msg, flush=True)
 
                 if job_status == "done":
                     utils.download_file_and_update_db(
@@ -582,15 +564,12 @@ def main(**args):
 
                     msg = f"Downloaded {sample_id} workbook"
                     base_log.info(msg)
-                    print(msg, flush=True)
                 else:
                     msg = f"{job.id} didn't finish successfully"
                     base_log.info(msg)
-                    print(msg, flush=True)
 
     msg = "Finished workbook monitoring"
     base_log.info(msg)
-    print(msg, flush=True)
 
 
 if __name__ == "__main__":
