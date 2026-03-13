@@ -2,6 +2,7 @@ services:
   # database containers, one for each db
   db:
     container_name: sc_wgs_monitoring_db
+    restart: always
     build:
       context: .
       dockerfile: monitoring_db.Dockerfile
