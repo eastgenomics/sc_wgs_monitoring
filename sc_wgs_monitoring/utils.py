@@ -1,6 +1,7 @@
 import concurrent
 import datetime
 import importlib.util
+import logging
 from pathlib import Path, PosixPath
 from typing import Dict
 import os
@@ -14,6 +15,9 @@ from sqlalchemy.schema import Table
 from sqlalchemy.orm import Session
 
 from sc_wgs_monitoring import check, db, dnanexus
+
+
+logger = logging.getLogger("basic")
 
 
 def load_config(config_file) -> Dict:
@@ -63,10 +67,11 @@ def load_env_variables() -> tuple:
     except KeyError as e:
         key = e.args[0]
 
-        raise KeyError(
+        logger.error(
             f"Unable to import {key} from environment, is an .env file "
             "present or env variables set?"
         )
+        sys.exit()
 
     return (
         dx_token,
@@ -298,7 +303,7 @@ def download_file_and_update_db(
             },
         )
     else:
-        raise FileNotFoundError(
+        logger.error(
             f"{Path(download_location / f'{sample_id}.xlsx')} wasn't downloaded"
         )
 
