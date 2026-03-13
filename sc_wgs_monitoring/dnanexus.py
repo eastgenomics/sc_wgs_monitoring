@@ -1,9 +1,24 @@
 import datetime
+import logging
 from pathlib import PosixPath
 from typing import Dict
 import re
 
 import dxpy
+
+from sc_wgs_monitoring import notifications, utils
+
+logger = logging.getLogger("basic")
+
+(
+    dx_token,
+    slack_token,
+    slack_log_channel,
+    slack_alert_channel,
+    sc_wgs_db,
+    postgres_user,
+    postgres_pwd,
+) = utils.load_env_variables()
 
 
 def login_to_dnanexus(token: str):
@@ -122,9 +137,12 @@ def assign_dxfile_to_workbook_input(file: dxpy.DXFile, patterns: dict) -> dict:
         if re.search(pattern, file.name):
             return {input_name: {"$dnanexus_link": file.id}}
 
-    raise AssertionError(
-        "Couldn't match a dnanexus filename to an expected workbook input name"
+    error_msg = (
+        f"Couldn't match {file.id} - {file.name} to an expected workbook "
+        f"input name: {" | ".join(list(patterns.keys()))}"
     )
+    logger.error(error_msg)
+    notifications.slack_notify(error_msg, slack_alert_channel, slack_token)
 
 
 def prepare_inputs(
