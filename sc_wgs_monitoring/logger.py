@@ -7,7 +7,7 @@ LOGGING = {
     "disable_existing_loggers": False,
     "formatters": {
         "simple": {
-            "format": "{levelname}|{module}|{asctime}|{message}",
+            "format": "{levelname}|{module}|{asctime} - {message}",
             "style": "{",
         },
     },
@@ -35,6 +35,13 @@ LOGGING = {
             "formatter": "simple",
             "maxBytes": 5242880,
             "backupCount": 2,
+        },
+        "stream-log": {
+            "level": "DEBUG",
+            "class": "logging.handlers.StreamHandler",
+            "formatter": "simple",
+            "flush": True,
+            "stream": "ext://sys.stdout",
         },
     },
     # Loggers
