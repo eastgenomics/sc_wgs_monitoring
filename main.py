@@ -11,17 +11,18 @@ from sc_wgs_monitoring import check, dnanexus, db, logger, notifications, utils
 logger.set_up_logger()
 base_log = logging.getLogger("basic")
 
+(
+    dx_token,
+    slack_token,
+    slack_log_channel,
+    slack_alert_channel,
+    sc_wgs_db,
+    postgres_user,
+    postgres_pwd,
+) = utils.load_env_variables()
+
 
 def main(**args):
-    (
-        dx_token,
-        slack_token,
-        slack_log_channel,
-        slack_alert_channel,
-        sc_wgs_db,
-        postgres_user,
-        postgres_pwd,
-    ) = utils.load_env_variables()
     config_data = utils.load_config(args["config"])
 
     if args["time_to_check"]:
